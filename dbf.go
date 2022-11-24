@@ -3,7 +3,6 @@ package shapefile
 // FIXME document all exported types
 // FIXME support dBase version 7 files if needed, see https://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm
 // FIXME work through https://www.clicketyclick.dk/databases/xbase/format/dbf.html and add any missing features
-// FIXME can we detect integer fields somehow, instead of using float64s all for all numerics?
 // FIXME add unmarshaller that unmarshals a record into a Go struct with `dbf:"..."` tags?s
 // FIXME validate logical implementation
 // FIXME add support for memos
@@ -16,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -29,21 +29,21 @@ var (
 		'C': {},
 		'D': {},
 		'F': {},
-		'N': {},
 		'L': {},
 		'M': {},
+		'N': {},
 	}
 
-	knownLogicalValues = map[string]any{
-		"?": nil,
-		"F": false,
-		"N": false,
-		"T": true,
-		"Y": true,
-		"f": false,
-		"n": false,
-		"t": true,
-		"y": true,
+	knownLogicalValues = map[byte]any{
+		'?': nil,
+		'F': false,
+		'N': false,
+		'T': true,
+		'Y': true,
+		'f': false,
+		'n': false,
+		't': true,
+		'y': true,
 	}
 )
 
@@ -136,7 +136,7 @@ func ReadDBF(r io.Reader, size int64) (*DBF, error) {
 			for _, fieldDescriptor := range fieldDescriptors {
 				fieldData := recordData[offset : offset+fieldDescriptor.Length]
 				offset += fieldDescriptor.Length
-				field, err := fieldDescriptor.Parse(fieldData)
+				field, err := fieldDescriptor.ParseData(fieldData)
 				if err != nil {
 					return nil, fmt.Errorf("field %s: %w", fieldDescriptor.Name, err)
 				}
@@ -224,30 +224,20 @@ func (d *DBF) Record(i int) map[string]any {
 	return fields
 }
 
-func (d *DBFFieldDescriptor) Parse(data []byte) (any, error) {
+func (d *DBFFieldDescriptor) ParseData(data []byte) (any, error) {
 	switch d.Type {
 	case 'C':
-		return string(bytes.TrimSpace(TrimTrailingZeros(data))), nil
+		return parseCharacter(data), nil
 	case 'D':
 		return parseDate(data)
-	case 'F', 'N':
-		fieldStr := string(bytes.TrimSpace(TrimTrailingZeros(data)))
-		if fieldStr == "" {
-			return nil, nil
-		}
-		field, err := strconv.ParseFloat(fieldStr, 64)
-		if err != nil {
-			return nil, fmt.Errorf("%q: invalid numeric: %w", fieldStr, err)
-		}
-		return field, nil
+	case 'F':
+		return parseFloat(data)
 	case 'L':
-		field, ok := knownLogicalValues[string(data)]
-		if !ok {
-			return nil, fmt.Errorf("%q: invalid logical", string(data))
-		}
-		return field, nil
+		return parseLogical(data)
 	case 'M':
-		return DBFMemo(bytes.TrimSpace(TrimTrailingZeros(data))), nil
+		return parseMemo(data), nil
+	case 'N':
+		return parseNumber(data)
 	default:
 		return nil, fmt.Errorf("%d: unsupported field type", d.Type)
 	}
@@ -260,6 +250,10 @@ func TrimTrailingZeros(data []byte) []byte {
 		}
 	}
 	return nil
+}
+
+func parseCharacter(data []byte) string {
+	return string(bytes.TrimSpace(TrimTrailingZeros(data)))
 }
 
 func parseDate(data []byte) (time.Time, error) {
@@ -279,4 +273,50 @@ func parseDate(data []byte) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("%s: invalid day: %w", string(data[6:8]), err)
 	}
 	return time.Date(int(year), time.Month(month), int(day), 0, 0, 0, 0, time.UTC), nil
+}
+
+func parseFloat(data []byte) (any, error) {
+	fieldStr := string(bytes.TrimSpace(TrimTrailingZeros(data)))
+	if fieldStr == "" {
+		return nil, nil
+	}
+	field, err := strconv.ParseFloat(fieldStr, 64)
+	if err != nil {
+		return nil, fmt.Errorf("%q: invalid numeric: %w", fieldStr, err)
+	}
+	return field, nil
+}
+
+func parseLogical(data []byte) (any, error) {
+	if len(data) != 1 {
+		return nil, fmt.Errorf("%q: invalid logical", string(data))
+	}
+	field, ok := knownLogicalValues[data[0]]
+	if !ok {
+		return nil, fmt.Errorf("%q: invalid logical", string(data))
+	}
+	return field, nil
+}
+
+func parseMemo(data []byte) DBFMemo {
+	return DBFMemo(bytes.TrimSpace(TrimTrailingZeros(data)))
+}
+
+func parseNumber(data []byte) (any, error) {
+	fieldStr := string(bytes.TrimSpace(TrimTrailingZeros(data)))
+	if fieldStr == "" {
+		return nil, nil
+	}
+	if strings.Contains(fieldStr, ".") {
+		field, err := strconv.ParseFloat(fieldStr, 64)
+		if err != nil {
+			return nil, fmt.Errorf("%q: invalid numeric: %w", fieldStr, err)
+		}
+		return field, nil
+	}
+	field, err := strconv.ParseInt(fieldStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("%q: invalid numeric: %w", fieldStr, err)
+	}
+	return int(field), nil
 }
