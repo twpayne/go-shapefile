@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/text/encoding/charmap"
 )
 
 const (
@@ -45,6 +47,8 @@ var (
 		't': true,
 		'y': true,
 	}
+
+	iso8859_1Decoder = charmap.ISO8859_1.NewDecoder()
 )
 
 type DBFHeader struct {
@@ -227,7 +231,7 @@ func (d *DBF) Record(i int) map[string]any {
 func (d *DBFFieldDescriptor) ParseData(data []byte) (any, error) {
 	switch d.Type {
 	case 'C':
-		return parseCharacter(data), nil
+		return parseCharacter(data)
 	case 'D':
 		return parseDate(data)
 	case 'F':
@@ -252,8 +256,8 @@ func TrimTrailingZeros(data []byte) []byte {
 	return nil
 }
 
-func parseCharacter(data []byte) string {
-	return string(bytes.TrimSpace(TrimTrailingZeros(data)))
+func parseCharacter(data []byte) (string, error) {
+	return iso8859_1Decoder.String(string(bytes.TrimSpace(TrimTrailingZeros(data))))
 }
 
 func parseDate(data []byte) (time.Time, error) {

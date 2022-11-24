@@ -83,7 +83,7 @@ func TestReadFSAndZipFile(t *testing.T) {
 			expectedDBFRecord0Fields: map[string]any{
 				"Art":        "Windkraftanlage",
 				"Befeuert":   "N",
-				"Betreiber":  "Viktor Kaplan M\xfcrz GmbH",
+				"Betreiber":  "Viktor Kaplan Mürz GmbH",
 				"GZ":         "FA18E-88-1082/2002-18",
 				"Hoehe_Fp":   1580.,
 				"Hoehe_Obj":  100.,
