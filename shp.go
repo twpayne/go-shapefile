@@ -2,7 +2,9 @@ package shapefile
 
 // FIXME document all exported types
 // FIXME validate XYZ and XYZM code
-// FIXME domore validation, especially against the length of the file
+// FIXME do more validation, especially against the length of the file
+// FIXME use .shx indexes
+// FIXME factor out ParseSHPRecord
 
 import (
 	"archive/zip"
