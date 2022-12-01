@@ -313,15 +313,46 @@ func ParseSHxHeader(data []byte, fileLength int64) (*SHxHeader, error) {
 	minM := math.Float64frombits(binary.LittleEndian.Uint64(data[84:92]))
 	maxM := math.Float64frombits(binary.LittleEndian.Uint64(data[92:100]))
 
+	if NoData(minX) {
+		minX = math.Inf(1)
+	}
+	if NoData(minY) {
+		minY = math.Inf(1)
+	}
+	if NoData(maxX) {
+		maxX = math.Inf(-1)
+	}
+	if NoData(maxY) {
+		maxY = math.Inf(-1)
+	}
+
 	var bounds *geom.Bounds
 	switch shapeType {
 	case ShapeTypeNull:
 	case ShapeTypePoint, ShapeTypeMultiPoint, ShapeTypePolyLine, ShapeTypePolygon:
-		bounds = geom.NewBounds(geom.XY).SetCoords(geom.Coord{minX, minY}, geom.Coord{maxX, maxY})
+		bounds = geom.NewBounds(geom.XY).Set(minX, minY, maxX, maxY)
 	case ShapeTypePointM, ShapeTypeMultiPointM, ShapeTypePolyLineM, ShapeTypePolygonM:
-		bounds = geom.NewBounds(geom.XYM).SetCoords(geom.Coord{minX, minY, minM}, geom.Coord{maxX, maxY, maxM})
+		if NoData(minM) {
+			minM = math.Inf(1)
+		}
+		if NoData(maxM) {
+			maxM = math.Inf(-1)
+		}
+		bounds = geom.NewBounds(geom.XYM).Set(minX, minY, minM, maxX, maxY, maxM)
 	case ShapeTypePointZ, ShapeTypeMultiPointZ, ShapeTypePolyLineZ, ShapeTypePolygonZ:
-		bounds = geom.NewBounds(geom.XYZM).SetCoords(geom.Coord{minX, minY, minZ, minM}, geom.Coord{maxX, maxY, maxZ, maxM})
+		if NoData(minM) {
+			minM = math.Inf(1)
+		}
+		if NoData(maxM) {
+			maxM = math.Inf(-1)
+		}
+		if NoData(minZ) {
+			minZ = math.Inf(1)
+		}
+		if NoData(maxZ) {
+			maxZ = math.Inf(-1)
+		}
+		bounds = geom.NewBounds(geom.XYZM).Set(minX, minY, minZ, minM, maxX, maxY, maxZ, maxM)
 	}
 
 	return &SHxHeader{
@@ -331,7 +362,7 @@ func ParseSHxHeader(data []byte, fileLength int64) (*SHxHeader, error) {
 }
 
 func NoData(x float64) bool {
-	return x < -10e38
+	return x <= -1e38
 }
 
 func readFull(r io.Reader, data []byte) error {

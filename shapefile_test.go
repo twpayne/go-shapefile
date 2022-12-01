@@ -6,6 +6,8 @@ package shapefile
 
 import (
 	"archive/zip"
+	"fmt"
+	"math"
 	"os"
 	"testing"
 
@@ -14,6 +16,175 @@ import (
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkt"
 )
+
+func TestReadFS(t *testing.T) {
+	for _, tc := range []struct {
+		skip               bool
+		basename           string
+		hasDBF             bool
+		hasPRJ             bool
+		hasSHX             bool
+		expectedErr        string
+		expectedShapeType  ShapeType
+		expectedBounds     *geom.Bounds
+		expectedRecordsLen int
+		expectedGeom0      geom.T
+	}{
+		{
+			basename:           "line",
+			hasSHX:             true,
+			expectedShapeType:  ShapeTypePolyLine,
+			expectedBounds:     geom.NewBounds(geom.XY).Set(1, 1, 5, 6),
+			expectedRecordsLen: 1,
+			expectedGeom0:      newGeomFromWKT(t, "MULTILINESTRING ((1 5,5 5,5 1,3 3,1 1),(3 2,2 6))"),
+		},
+		{
+			basename:           "linem",
+			hasSHX:             true, // FIXME
+			expectedShapeType:  ShapeTypePolyLineM,
+			expectedBounds:     geom.NewBounds(geom.XYM).Set(1, 1, 0, 5, 6, 3),
+			expectedRecordsLen: 1,
+			expectedGeom0:      newGeomFromWKT(t, "MULTILINESTRING M ((1 5 0,5 5 -1E+39,5 1 3,3 3 -1E+39,1 1 0),(3 2 -1E+39,2 6 -1E+39))"),
+		},
+		{
+			basename:           "linez",
+			hasSHX:             true, // FIXME
+			expectedShapeType:  ShapeTypePolyLineZ,
+			expectedBounds:     geom.NewBounds(geom.XYZM).Set(1, 1, 0, 0, 5, 9, 22, 3),
+			expectedRecordsLen: 1,
+			expectedGeom0:      newGeomFromWKT(t, "MULTILINESTRING ZM ((1 5 18 -1E+39,5 5 20 -1E+39,5 1 22 -1E+39,3 3 0 -1E+39,1 1 0 -1E+39),(3 2 0 -1E+39,2 6 0 -1E+39),(3 2 15 0,2 6 13 3,1 9 14 2))"),
+		},
+		{
+			/*
+				INFO: Open of `multipatch.shp'
+				      using driver `ESRI Shapefile' successful.
+
+				Layer name: multipatch
+				Metadata:
+				  DBF_DATE_LAST_UPDATE=2018-09-02
+				Geometry: Unknown (any)
+				Feature Count: 1
+				Extent: (0.000000, 0.000000) - (5.000000, 5.000000)
+				Layer SRS WKT:
+				(unknown)
+				name: String (50.0)
+				OGRFeature(multipatch):0
+				  name (String) = house1
+				  GEOMETRYCOLLECTION Z (TIN Z (((0 0 0,0 0 3,5 0 0,0 0 0)),((0 0 3,5 0 0,5 0 3,0 0 3)),((5 0 0,5 0 3,5 5 0,5 0 0)),((5 0 3,5 5 0,5 5 3,5 0 3)),((5 5 0,5 5 3,0 5 0,5 5 0)),((5 5 3,0 5 0,0 5 3,5 5 3)),((0 5 0,0 5 3,0 0 0,0 5 0)),((0 5 3,0 0 0,0 0 3,0 5 3))),TIN Z (((2.5 2.5 5,0 0 3,5 0 3,2.5 2.5 5)),((2.5 2.5 5,5 0 3,5 5 3,2.5 2.5 5)),((2.5 2.5 5,5 5 3,0 5 3,2.5 2.5 5)),((2.5 2.5 5,0 5 3,0 0 3,2.5 2.5 5))))
+			*/
+			skip:        true, // FIXME
+			basename:    "multipatch",
+			expectedErr: "x",
+		},
+		{
+			basename:           "multipoint",
+			hasSHX:             true, // FIXME
+			expectedShapeType:  ShapeTypeMultiPoint,
+			expectedBounds:     geom.NewBounds(geom.XY).Set(122, 32, 124, 37),
+			expectedRecordsLen: 1,
+			expectedGeom0:      newGeomFromWKT(t, "MULTIPOINT ((122 37),(124 32))"),
+		},
+		{
+			skip:               true, // FIXME
+			basename:           "multipointz",
+			hasSHX:             true, // FIXME
+			expectedShapeType:  ShapeTypeMultiPointZ,
+			expectedBounds:     geom.NewBounds(geom.XYZM).Set(1422671.7232666016, 4188903.4295959473, 71.99445343017578, math.Inf(1), 1422672.1022949219, 4188903.7578430176, 72009956.35986328, math.Inf(-1)),
+			expectedRecordsLen: 1,
+			expectedGeom0:      newGeomFromWKT(t, "MULTIPOINT Z ((1422671.7232666 4188903.42959595 72.0099563598633),(1422672.10229492 4188903.42959595 72.0060806274414),(1422671.91278076 4188903.75784302 72.0022048950195),(1422671.91278076 4188903.53900146 71.9944534301758))"),
+		},
+		{
+			basename:           "point",
+			hasSHX:             true,
+			expectedShapeType:  ShapeTypePoint,
+			expectedBounds:     geom.NewBounds(geom.XY).Set(122, 37, 122, 37),
+			expectedRecordsLen: 1,
+			expectedGeom0:      newGeomFromWKT(t, "POINT (122 37)"),
+		},
+		{
+			skip:               true, // FIXME
+			basename:           "pointz",
+			hasSHX:             true, // FIXME
+			expectedShapeType:  ShapeTypePointZ,
+			expectedBounds:     geom.NewBounds(geom.XY).Set(1422459.090805, 4188942.211756, 1422464.368101, 4188962.336436),
+			expectedRecordsLen: 2,
+			expectedGeom0:      newGeomFromWKT(t, "POINT Z (1422464.36810072 4188962.33643558 72.4095647055809)"),
+		},
+		{
+			basename:           "polygon_hole",
+			hasSHX:             true,
+			expectedShapeType:  ShapeTypePolygon,
+			expectedBounds:     geom.NewBounds(geom.XY).Set(-120, -60, 120, 60),
+			expectedRecordsLen: 1,
+			expectedGeom0:      newGeomFromWKT(t, "POLYGON ((-120 60,120 60,120 -60,-120 -60,-120 60),(-60 30,-60 -30,60 -30,60 30,-60 30))"),
+		},
+		{
+			skip:               true,
+			basename:           "polygon",
+			hasSHX:             true, // FIXME
+			expectedShapeType:  ShapeTypePolygon,
+			expectedBounds:     geom.NewBounds(geom.XY).Set(122, 37, 122, 37),
+			expectedRecordsLen: 1,
+			expectedGeom0:      newGeomFromWKT(t, "POINT (122 37)"),
+		},
+		{
+			basename:           "polygonm",
+			hasSHX:             true, // FIXME
+			expectedShapeType:  ShapeTypePolygonM,
+			expectedBounds:     geom.NewBounds(geom.XYM).Set(159374.30785312195, 5403473.287488617, 0, 160420.36722814097, 5404314.139043656, 0),
+			expectedRecordsLen: 1,
+			expectedGeom0:      newGeomFromWKT(t, "POLYGON M ((159814.75390576152 5404314.139043656 0,160420.36722814097 5403703.520652497 0,159374.30785312195 5403473.287488617 0,159814.753905761517 5404314.139043656 0))"),
+		},
+		{
+			basename:           "polygonz",
+			hasSHX:             true, // FIXME
+			expectedShapeType:  ShapeTypePolygonZ,
+			expectedBounds:     geom.NewBounds(geom.XYZM).Set(1422691.1637959871, 4188837.293869424, 0, math.Inf(1), 1422692.1644789441, 4188838.2945523816, 0, math.Inf(-1)),
+			expectedRecordsLen: 1,
+			expectedGeom0:      newGeomFromWKT(t, "POLYGON ZM ((1422692.1644789441 4188837.794210903 72.46632654472523 0, 1422692.1625749937 4188837.75060327 72.46632654472523 1, 1422692.156877633 4188837.7073275167 72.46632654472523 2, 1422692.1474302218 4188837.664712999 72.46632654472523 3, 1422692.1343046608 4188837.6230840385 72.46632654472523 4, 1422692.1176008438 4188837.582757457 72.46632654472523 5, 1422692.0974458966 4188837.5440401635 72.46632654472523 6, 1422692.0739932107 4188837.5072268206 72.46632654472523 7, 1422692.047421275 4188837.4725976 72.46632654472523 8, 1422692.017932318 4188837.4404160506 72.46632654472523 9, 1422691.9857507686 4188837.4109270936 72.46632654472523 10, 1422691.951121548 4188837.384355158 72.46632654472523 11, 1422691.914308205 4188837.360902472 72.46632654472523 12, 1422691.8755909116 4188837.3407475245 72.46632654472523 13, 1422691.8352643298 4188837.3240437075 72.46632654472523 14, 1422691.7936353693 4188837.3109181467 72.46632654472523 15, 1422691.7510208515 4188837.3014707356 72.46632654472523 16, 1422691.7077450987 4188837.295773375 72.46632654472523 17, 1422691.6641374656 4188837.293869424 72.46632654472523 18, 1422691.6205298326 4188837.295773375 72.46632654472523 19, 1422691.5772540797 4188837.3014707356 72.46632654472523 20, 1422691.534639562 4188837.3109181467 72.46632654472523 21, 1422691.4930106015 4188837.3240437075 72.46632654472523 22, 1422691.4526840197 4188837.3407475245 72.46632654472523 23, 1422691.4139667263 4188837.360902472 72.46632654472523 24, 1422691.3771533833 4188837.384355158 72.46632654472523 25, 1422691.3425241627 4188837.4109270936 72.46632654472523 26, 1422691.3103426134 4188837.4404160506 72.46632654472523 27, 1422691.2808536564 4188837.4725976 72.46632654472523 28, 1422691.2542817206 4188837.5072268206 72.46632654472523 29, 1422691.2308290347 4188837.5440401635 72.46632654472523 30, 1422691.2106740875 4188837.582757457 72.46632654472523 31, 1422691.1939702705 4188837.6230840385 72.46632654472523 32, 1422691.1808447095 4188837.664712999 72.46632654472523 33, 1422691.1713972983 4188837.7073275167 72.46632654472523 34, 1422691.1656999376 4188837.75060327 72.46632654472523 35, 1422691.1637959871 4188837.794210903 72.46632654472523 36, 1422691.1656999376 4188837.837818536 72.46632654472523 37, 1422691.1713972983 4188837.881094289 72.46632654472523 38, 1422691.1808447095 4188837.9237088067 72.46632654472523 39, 1422691.1939702705 4188837.9653377673 72.46632654472523 40, 1422691.2106740875 4188838.0056643486 72.46632654472523 41, 1422691.2308290347 4188838.0443816422 72.46632654472523 42, 1422691.2542817206 4188838.081194985 72.46632654472523 43, 1422691.2808536564 4188838.115824206 72.46632654472523 44, 1422691.3103426134 4188838.148005755 72.46632654472523 45, 1422691.3425241627 4188838.177494712 72.46632654472523 46, 1422691.3771533833 4188838.2040666477 72.46632654472523 47, 1422691.4139667263 4188838.227519334 72.46632654472523 48, 1422691.4526840197 4188838.2476742812 72.46632654472523 49, 1422691.4930106015 4188838.2643780983 72.46632654472523 50, 1422691.534639562 4188838.277503659 72.46632654472523 51, 1422691.5772540797 4188838.28695107 72.46632654472523 52, 1422691.6205298326 4188838.292648431 72.46632654472523 53, 1422691.6641374656 4188838.2945523816 72.46632654472523 54, 1422691.7077450987 4188838.292648431 72.46632654472523 55, 1422691.7510208515 4188838.28695107 72.46632654472523 56, 1422691.7936353693 4188838.277503659 72.46632654472523 57, 1422691.8352643298 4188838.2643780983 72.46632654472523 58, 1422691.8755909116 4188838.2476742812 72.46632654472523 59, 1422691.914308205 4188838.227519334 72.46632654472523 60, 1422691.951121548 4188838.2040666477 72.46632654472523 61, 1422691.9857507686 4188838.177494712 72.46632654472523 62, 1422692.017932318 4188838.148005755 72.46632654472523 63, 1422692.047421275 4188838.115824206 72.46632654472523 64, 1422692.0739932107 4188838.081194985 72.46632654472523 65, 1422692.0974458966 4188838.0443816422 72.46632654472523 66, 1422692.1176008438 4188838.0056643486 72.46632654472523 67, 1422692.1343046608 4188837.9653377673 72.46632654472523 68, 1422692.1474302218 4188837.9237088067 72.46632654472523 69, 1422692.156877633 4188837.881094289 72.46632654472523 70, 1422692.1625749937 4188837.837818536 72.46632654472523 71, 1422692.1644789441 4188837.794210903 72.46632654472523 72))"),
+		},
+		{
+			skip:               true, // FIXME
+			basename:           "poly",
+			hasSHX:             true,
+			expectedShapeType:  ShapeTypePolygon,
+			expectedBounds:     geom.NewBounds(geom.XY).Set(478315.531250, 4762880.5, 481645.312500, 4765610.5),
+			expectedRecordsLen: 10,
+			expectedGeom0:      newGeomFromWKT(t, "POLYGON ((479819.84375 4765180.5,479690.1875 4765259.5,479647.0 4765369.5,479730.375 4765400.5,480039.03125 4765539.5,480035.34375 4765558.5,480159.78125 4765610.5,480202.28125 4765482.0,480365.0 4765015.5,480389.6875 4764950.0,480133.96875 4764856.5,480080.28125 4764979.5,480082.96875 4765049.5,480088.8125 4765139.5,480059.90625 4765239.5,480019.71875 4765319.5,479980.21875 4765409.5,479909.875 4765370.0,479859.875 4765270.0,479819.84375 4765180.5))"),
+		},
+	} {
+		if tc.skip {
+			continue // FIXME
+		}
+		t.Run(tc.basename, func(t *testing.T) {
+			shapefile, err := ReadFS(os.DirFS("testdata"), tc.basename)
+			if tc.expectedErr != "" {
+				require.Error(t, err, tc.expectedErr)
+			}
+			require.NoError(t, err)
+
+			assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
+			assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
+			assert.Len(t, shapefile.SHP.Records, tc.expectedRecordsLen)
+			fmt.Println(wkt.Marshal(shapefile.SHP.Records[0].Geom))
+			assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
+
+			if tc.hasDBF {
+				assert.Len(t, shapefile.DBF.Records, tc.expectedRecordsLen)
+			} else {
+				assert.Nil(t, shapefile.DBF)
+			}
+
+			if tc.hasSHX {
+				assert.Equal(t, tc.expectedShapeType, shapefile.SHX.ShapeType)
+				assert.Equal(t, tc.expectedBounds, shapefile.SHX.Bounds)
+				assert.Len(t, shapefile.SHX.Records, tc.expectedRecordsLen)
+			} else {
+				assert.Nil(t, shapefile.SHX)
+			}
+		})
+	}
+}
 
 func TestReadFSAndZipFile(t *testing.T) {
 	for _, tc := range []struct {
