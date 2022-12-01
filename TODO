@@ -1,0 +1,5 @@
+Make newGeomFromWKT verify WKT by performing round trip, i.e. check that generated geom, when converted back to WKT, matches input string
+Remove generated SHX files
+Add script to generate SHX files using https://stackoverflow.com/questions/61436956/set-shape-restore-shx-config-option-to-yes-to-restore-or-create-it
+Report broken files to georust/geozero
+Generate SHX indexes from SHP files

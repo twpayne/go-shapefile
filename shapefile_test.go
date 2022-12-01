@@ -1,12 +1,7 @@
 package shapefile
 
-// FIXME add test with PolyLine geometries
-// FIXME add test with *M geometries
-// FIXME add test with *Z geometries
-
 import (
 	"archive/zip"
-	"fmt"
 	"math"
 	"os"
 	"testing"
@@ -55,26 +50,8 @@ func TestReadFS(t *testing.T) {
 			expectedGeom0:      newGeomFromWKT(t, "MULTILINESTRING ZM ((1 5 18 -1E+39,5 5 20 -1E+39,5 1 22 -1E+39,3 3 0 -1E+39,1 1 0 -1E+39),(3 2 0 -1E+39,2 6 0 -1E+39),(3 2 15 0,2 6 13 3,1 9 14 2))"),
 		},
 		{
-			/*
-				INFO: Open of `multipatch.shp'
-				      using driver `ESRI Shapefile' successful.
-
-				Layer name: multipatch
-				Metadata:
-				  DBF_DATE_LAST_UPDATE=2018-09-02
-				Geometry: Unknown (any)
-				Feature Count: 1
-				Extent: (0.000000, 0.000000) - (5.000000, 5.000000)
-				Layer SRS WKT:
-				(unknown)
-				name: String (50.0)
-				OGRFeature(multipatch):0
-				  name (String) = house1
-				  GEOMETRYCOLLECTION Z (TIN Z (((0 0 0,0 0 3,5 0 0,0 0 0)),((0 0 3,5 0 0,5 0 3,0 0 3)),((5 0 0,5 0 3,5 5 0,5 0 0)),((5 0 3,5 5 0,5 5 3,5 0 3)),((5 5 0,5 5 3,0 5 0,5 5 0)),((5 5 3,0 5 0,0 5 3,5 5 3)),((0 5 0,0 5 3,0 0 0,0 5 0)),((0 5 3,0 0 0,0 0 3,0 5 3))),TIN Z (((2.5 2.5 5,0 0 3,5 0 3,2.5 2.5 5)),((2.5 2.5 5,5 0 3,5 5 3,2.5 2.5 5)),((2.5 2.5 5,5 5 3,0 5 3,2.5 2.5 5)),((2.5 2.5 5,0 5 3,0 0 3,2.5 2.5 5))))
-			*/
-			skip:        true, // FIXME
-			basename:    "multipatch",
-			expectedErr: "x",
+			skip:     true,
+			basename: "multipatch",
 		},
 		{
 			basename:           "multipoint",
@@ -85,13 +62,12 @@ func TestReadFS(t *testing.T) {
 			expectedGeom0:      newGeomFromWKT(t, "MULTIPOINT ((122 37),(124 32))"),
 		},
 		{
-			skip:               true, // FIXME
 			basename:           "multipointz",
 			hasSHX:             true, // FIXME
 			expectedShapeType:  ShapeTypeMultiPointZ,
 			expectedBounds:     geom.NewBounds(geom.XYZM).Set(1422671.7232666016, 4188903.4295959473, 71.99445343017578, math.Inf(1), 1422672.1022949219, 4188903.7578430176, 72009956.35986328, math.Inf(-1)),
 			expectedRecordsLen: 1,
-			expectedGeom0:      newGeomFromWKT(t, "MULTIPOINT Z ((1422671.7232666 4188903.42959595 72.0099563598633),(1422672.10229492 4188903.42959595 72.0060806274414),(1422671.91278076 4188903.75784302 72.0022048950195),(1422671.91278076 4188903.53900146 71.9944534301758))"),
+			// expectedGeom0:      newGeomFromWKT(t, "MULTIPOINT Z ((1422671.7232666 4188903.42959595 72.0099563598633),(1422672.10229492 4188903.42959595 72.0060806274414),(1422671.91278076 4188903.75784302 72.0022048950195),(1422671.91278076 4188903.53900146 71.9944534301758))"),
 		},
 		{
 			basename:           "point",
@@ -153,10 +129,10 @@ func TestReadFS(t *testing.T) {
 			expectedGeom0:      newGeomFromWKT(t, "POLYGON ((479819.84375 4765180.5,479690.1875 4765259.5,479647.0 4765369.5,479730.375 4765400.5,480039.03125 4765539.5,480035.34375 4765558.5,480159.78125 4765610.5,480202.28125 4765482.0,480365.0 4765015.5,480389.6875 4764950.0,480133.96875 4764856.5,480080.28125 4764979.5,480082.96875 4765049.5,480088.8125 4765139.5,480059.90625 4765239.5,480019.71875 4765319.5,479980.21875 4765409.5,479909.875 4765370.0,479859.875 4765270.0,479819.84375 4765180.5))"),
 		},
 	} {
-		if tc.skip {
-			continue // FIXME
-		}
 		t.Run(tc.basename, func(t *testing.T) {
+			if tc.skip {
+				t.Skip()
+			}
 			shapefile, err := ReadFS(os.DirFS("testdata"), tc.basename)
 			if tc.expectedErr != "" {
 				require.Error(t, err, tc.expectedErr)
@@ -166,7 +142,6 @@ func TestReadFS(t *testing.T) {
 			assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
 			assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
 			assert.Len(t, shapefile.SHP.Records, tc.expectedRecordsLen)
-			fmt.Println(wkt.Marshal(shapefile.SHP.Records[0].Geom))
 			assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
 
 			if tc.hasDBF {
