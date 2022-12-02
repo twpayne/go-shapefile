@@ -1,6 +1,5 @@
 package shapefile
 
-// FIXME document all exported types
 // FIXME support dBase version 7 files if needed, see https://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm
 // FIXME work through https://www.clicketyclick.dk/databases/xbase/format/dbf.html and add any missing features
 // FIXME add unmarshaller that unmarshals a record into a Go struct with `dbf:"..."` tags?s
@@ -49,8 +48,13 @@ var (
 	}
 
 	iso8859_1Decoder = charmap.ISO8859_1.NewDecoder()
+
+	errDBTFilesNotSupported  = errors.New(".DBT files are not supported")
+	errInvalidDateField      = errors.New("invalid date field")
+	errMemoFilesNotSupported = errors.New("memo files are not supported")
 )
 
+// A DBFHeader is a DBF header.
 type DBFHeader struct {
 	Version    int
 	Memo       bool
@@ -61,6 +65,7 @@ type DBFHeader struct {
 	RecordSize int
 }
 
+// A DBFFieldDescriptor describes a DBF field.
 type DBFFieldDescriptor struct {
 	Name         string
 	Type         byte
@@ -80,8 +85,10 @@ type DBF struct {
 	Records          [][]any
 }
 
+// A DBFMemo is a DBF memo.
 type DBFMemo string
 
+// ReadDBF reads a DBF file from r.
 func ReadDBF(r io.Reader, size int64) (*DBF, error) {
 	headerData := make([]byte, dbfHeaderLength)
 	if err := readFull(r, headerData); err != nil {
@@ -140,7 +147,7 @@ func ReadDBF(r io.Reader, size int64) (*DBF, error) {
 			for _, fieldDescriptor := range fieldDescriptors {
 				fieldData := recordData[offset : offset+fieldDescriptor.Length]
 				offset += fieldDescriptor.Length
-				field, err := fieldDescriptor.ParseData(fieldData)
+				field, err := fieldDescriptor.ParseRecord(fieldData)
 				if err != nil {
 					return nil, fmt.Errorf("field %s: %w", fieldDescriptor.Name, err)
 				}
@@ -169,6 +176,7 @@ func ReadDBF(r io.Reader, size int64) (*DBF, error) {
 	}, nil
 }
 
+// ParseDBFHeader parses a DBFHeader from data.
 func ParseDBFHeader(data []byte) (*DBFHeader, error) {
 	if len(data) != dbfHeaderLength {
 		return nil, errInvalidHeader
@@ -180,11 +188,11 @@ func ParseDBFHeader(data []byte) (*DBFHeader, error) {
 	}
 	memo := int(data[0])&0x8 == 0x8
 	if memo {
-		return nil, errors.New("memo files are not supported") // FIXME move error to top level variable
+		return nil, errMemoFilesNotSupported
 	}
 	dbt := int(data[0])&0x80 == 0x80
 	if dbt {
-		return nil, errors.New(".DBT files are not supported") // FIXME move error to top level variable
+		return nil, errDBTFilesNotSupported
 	}
 
 	lastUpdateYear := int(data[1]) + 1900
@@ -207,6 +215,7 @@ func ParseDBFHeader(data []byte) (*DBFHeader, error) {
 	}, nil
 }
 
+// ReadDBFZipFile reads a DBF file from a *zip.File.
 func ReadDBFZipFile(zipFile *zip.File) (*DBF, error) {
 	readCloser, err := zipFile.Open()
 	if err != nil {
@@ -216,6 +225,7 @@ func ReadDBFZipFile(zipFile *zip.File) (*DBF, error) {
 	return ReadDBF(readCloser, int64(zipFile.UncompressedSize64))
 }
 
+// Record returns the ith record.
 func (d *DBF) Record(i int) map[string]any {
 	if d.Records[i] == nil {
 		return nil
@@ -228,7 +238,8 @@ func (d *DBF) Record(i int) map[string]any {
 	return fields
 }
 
-func (d *DBFFieldDescriptor) ParseData(data []byte) (any, error) {
+// ParseRecord parses a record from data.
+func (d *DBFFieldDescriptor) ParseRecord(data []byte) (any, error) {
 	switch d.Type {
 	case 'C':
 		return parseCharacter(data)
@@ -247,6 +258,7 @@ func (d *DBFFieldDescriptor) ParseData(data []byte) (any, error) {
 	}
 }
 
+// TrimTrailingZeros trims any trailing zero bytes from data.
 func TrimTrailingZeros(data []byte) []byte {
 	for i := len(data) - 1; i >= 0; i-- {
 		if data[i] != '\x00' {
@@ -262,7 +274,7 @@ func parseCharacter(data []byte) (string, error) {
 
 func parseDate(data []byte) (time.Time, error) {
 	if len(data) != 8 {
-		return time.Time{}, errors.New("invalid date field")
+		return time.Time{}, errInvalidDateField
 	}
 	year, err := strconv.ParseInt(string(data[:4]), 10, 64)
 	if err != nil {
