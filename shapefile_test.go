@@ -32,7 +32,7 @@ func TestReadFS(t *testing.T) {
 			expectedShapeType:  ShapeTypePolyLine,
 			expectedBounds:     geom.NewBounds(geom.XY).Set(1, 1, 5, 6),
 			expectedRecordsLen: 1,
-			expectedGeom0:      newGeomFromWKT(t, "MULTILINESTRING ((1 5,5 5,5 1,3 3,1 1),(3 2,2 6))"),
+			expectedGeom0:      newGeomFromWKT(t, "MULTILINESTRING ((1 5,5 5,5 1,3 3,1 1),(3 2,2 6))"), //nolint:dupword
 		},
 		{
 			basename:           "linem",
@@ -89,7 +89,7 @@ func TestReadFS(t *testing.T) {
 			expectedShapeType:  ShapeTypePolygon,
 			expectedBounds:     geom.NewBounds(geom.XY).Set(-120, -60, 120, 60),
 			expectedRecordsLen: 1,
-			expectedGeom0:      newGeomFromWKT(t, "POLYGON ((-120 60,120 60,120 -60,-120 -60,-120 60),(-60 30,-60 -30,60 -30,60 30,-60 30))"),
+			expectedGeom0:      newGeomFromWKT(t, "POLYGON ((-120 60,120 60,120 -60,-120 -60,-120 60),(-60 30,-60 -30,60 -30,60 30,-60 30))"), //nolint:dupword
 		},
 		{
 			skipReason:         "rings are not closed",
