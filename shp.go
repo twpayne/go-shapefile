@@ -149,12 +149,9 @@ func ReadSHPRecord(r io.Reader) (*SHPRecord, error) {
 		expectedContentLength += 8*2 + 8*numPoints + 8*2 + 8*numPoints + 8*2 + 8*numPoints
 	}
 
-	// FIXME fix expected content length
-	/*
-		if contentLength != expectedContentLength {
-			return nil, errInvalidRecordContentLength
-		}
-	*/
+	if contentLength != expectedContentLength {
+		return nil, errInvalidRecordContentLength
+	}
 
 	var ends []int
 	switch shapeType {
