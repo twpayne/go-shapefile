@@ -10,21 +10,23 @@ import (
 
 type byteSliceReader []byte
 
-func (r *byteSliceReader) readEnds(n, last int) ([]int, error) {
+func (r *byteSliceReader) readEnds(layout geom.Layout, numParts, numPoints int) ([]int, error) {
 	sl := *r
 	if part := binary.LittleEndian.Uint32(sl[:4]); part != 0 {
 		return nil, fmt.Errorf("%d: invalid part", part)
 	}
-	ends := make([]int, 0, n)
-	for i := 1; i < n; i++ {
-		part := int(binary.LittleEndian.Uint32(sl[4*i : 4*i+4]))
-		if part > last {
+	stride := layout.Stride()
+	maxPart := stride * numPoints
+	ends := make([]int, 0, numParts)
+	for i := 1; i < numParts; i++ {
+		part := stride * int(binary.LittleEndian.Uint32(sl[4*i:4*i+4]))
+		if part > maxPart {
 			return nil, fmt.Errorf("%d: invalid part", part)
 		}
 		ends = append(ends, part)
 	}
-	ends = append(ends, last)
-	*r = sl[4*n:]
+	ends = append(ends, maxPart)
+	*r = sl[4*numParts:]
 	return ends, nil
 }
 

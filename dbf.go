@@ -147,7 +147,7 @@ func ReadDBF(r io.Reader, size int64) (*DBF, error) {
 				record = append(record, field)
 			}
 			records = append(records, record)
-		case '\x1a':
+		case '*':
 			records = append(records, nil)
 		default:
 			return nil, fmt.Errorf("%d: invalid record flag", recordData[0])
