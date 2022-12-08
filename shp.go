@@ -82,7 +82,7 @@ func ReadSHPRecord(r io.Reader) (*SHPRecord, error) {
 		return nil, err
 	}
 
-	byteSliceReader := byteSliceReader(recordData)
+	byteSliceReader := newByteSliceReader(recordData)
 
 	shapeType := ShapeType(byteSliceReader.readUint32())
 	expectedContentLength := 4
@@ -158,11 +158,7 @@ func ReadSHPRecord(r io.Reader) (*SHPRecord, error) {
 	case ShapeTypePolyLine, ShapeTypePolyLineM, ShapeTypePolyLineZ:
 		fallthrough
 	case ShapeTypePolygon, ShapeTypePolygonM, ShapeTypePolygonZ:
-		var err error
-		ends, err = byteSliceReader.readEnds(layout, numParts, numPoints)
-		if err != nil {
-			return nil, err
-		}
+		ends = byteSliceReader.readEnds(layout, numParts, numPoints)
 	}
 
 	flatCoords := make([]float64, layout.Stride()*numPoints)
@@ -182,6 +178,10 @@ func ReadSHPRecord(r io.Reader) (*SHPRecord, error) {
 		minM, maxM := byteSliceReader.readFloat64Pair()
 		byteSliceReader.readOrdinates(flatCoords, numPoints, layout, layout.MIndex())
 		bounds = geom.NewBounds(geom.XYZM).Set(minX, minY, minZ, minM, maxX, maxY, maxZ, maxM)
+	}
+
+	if err := byteSliceReader.Err(); err != nil {
+		return nil, err
 	}
 
 	var g geom.T
