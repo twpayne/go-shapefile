@@ -204,6 +204,13 @@ func ParseDBFHeader(data []byte) (*DBFHeader, error) {
 	headerSize := int(binary.LittleEndian.Uint16(data[8:10]))
 	recordSize := int(binary.LittleEndian.Uint16(data[10:12]))
 
+	if headerSize > MaxRecordContentLength {
+		return nil, errors.New("header too large")
+	}
+	if recordSize > MaxRecordContentLength {
+		return nil, errors.New("records too large")
+	}
+
 	return &DBFHeader{
 		Version:    version,
 		Memo:       memo,
