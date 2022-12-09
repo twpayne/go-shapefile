@@ -2,8 +2,11 @@ package shapefile
 
 import (
 	"archive/zip"
+	"io"
+	"io/fs"
 	"math"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -346,6 +349,55 @@ func TestReadFSAndZipFile(t *testing.T) {
 			})
 		})
 	}
+}
+
+func addFuzzDataFromFS(f *testing.F, fsys fs.FS, root, ext string) error {
+	return fs.WalkDir(fsys, root, func(path string, dirEntry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		switch filepath.Ext(path) {
+		case ext:
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			f.Add(data)
+		case ".exe", ".zip":
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			fileInfo, err := file.Stat()
+			if err != nil {
+				return err
+			}
+
+			zipReader, err := zip.NewReader(file, fileInfo.Size())
+			if err != nil {
+				return err
+			}
+
+			for _, zipFile := range zipReader.File {
+				if filepath.Ext(zipFile.Name) != ext {
+					continue
+				}
+				readCloser, err := zipFile.Open()
+				if err != nil {
+					return err
+				}
+				data, err := io.ReadAll(readCloser)
+				readCloser.Close()
+				if err != nil {
+					return err
+				}
+				f.Add(data)
+			}
+		}
+		return nil
+	})
 }
 
 func newGeomFromWKT(t *testing.T, wktStr string) geom.T {
