@@ -352,6 +352,7 @@ func TestReadFSAndZipFile(t *testing.T) {
 }
 
 func addFuzzDataFromFS(f *testing.F, fsys fs.FS, root, ext string) error {
+	f.Helper()
 	return fs.WalkDir(fsys, root, func(path string, dirEntry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
