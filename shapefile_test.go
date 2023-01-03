@@ -66,9 +66,9 @@ func TestReadFS(t *testing.T) {
 		{
 			basename:           "multipointz",
 			expectedShapeType:  ShapeTypeMultiPointZ,
-			expectedBounds:     geom.NewBounds(geom.XYZ).Set(1422671.7232666016, 4188903.4295959473, 71.99445343017578, 1422672.1022949219, 4188903.7578430176, 72.00995635986328),
+			expectedBounds:     geom.NewBounds(geom.XYZM).Set(1422671.7232666016, 4188903.4295959473, 71.99445343017578, math.Inf(1), 1422672.1022949219, 4188903.7578430176, 72.00995635986328, math.Inf(-1)),
 			expectedRecordsLen: 1,
-			expectedGeom0:      newGeomFromWKT(t, "MULTIPOINT Z ((1422671.7232666 4188903.42959595 72.0099563598633),(1422672.10229492 4188903.42959595 72.0060806274414),(1422671.91278076 4188903.75784302 72.0022048950195),(1422671.91278076 4188903.53900146 71.9944534301758))"),
+			expectedGeom0:      newGeomFromWKT(t, "MULTIPOINT ZM ((1422671.7232666016 4188903.4295959473 72.00995635986328 -1E38),(1422672.1022949219 4188903.4295959473 72.0060806274414 -1E38),(1422671.9127807617 4188903.7578430176 72.00220489501953 -1E38),(1422671.9127807617 4188903.539001465 71.99445343017578 -1E38))"),
 		},
 		{
 			basename:           "point",
@@ -100,7 +100,7 @@ func TestReadFS(t *testing.T) {
 			expectedShapeType:  ShapeTypePolygon,
 			expectedBounds:     geom.NewBounds(geom.XY).Set(15, 2, 122, 37),
 			expectedRecordsLen: 1,
-			// expectedGeom0:      newGeomFromWKT(t, "POLYGON ((122 37,117 36,115 32,118 20,113 24)),((15 2,17 6,22 7)),((122 37,117 36,115 32))"),
+			expectedGeom0:      newGeomFromWKT(t, "POLYGON ((122 37,117 36,115 32,118 20,113 24,122 37),(15 2,17 6,22 7,15 2),(122 37,117 36,115 32,122 37))"),
 		},
 		{
 			basename:           "polygonm",
