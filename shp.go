@@ -144,9 +144,9 @@ func ReadSHPRecord(r io.Reader) (*SHPRecord, error) {
 	case geom.XY:
 		expectedContentLength += 8 * 2 * numPoints
 	case geom.XYM:
-		expectedContentLength += 8*2 + 8*numPoints + 8*2 + 8*numPoints
+		expectedContentLength += 8*2*numPoints + 8*2 + 8*numPoints
 	case geom.XYZM:
-		expectedContentLength += 8*2 + 8*numPoints + 8*2 + 8*numPoints + 8*2 + 8*numPoints
+		expectedContentLength += 8*2*numPoints + 8*2 + 8*numPoints + 8*2 + 8*numPoints
 	}
 
 	if contentLength != expectedContentLength {
