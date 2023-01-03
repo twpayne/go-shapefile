@@ -133,7 +133,7 @@ func TestReadFS(t *testing.T) {
 				t.Skip(tc.skipReason)
 			}
 
-			shapefile, err := ReadFS(os.DirFS("testdata"), tc.basename)
+			shapefile, err := ReadFS(os.DirFS("testdata"), tc.basename, nil)
 			if tc.expectedErr != "" {
 				require.Error(t, err, tc.expectedErr)
 			}
@@ -333,14 +333,14 @@ func TestReadFSAndZipFile(t *testing.T) {
 				zipReader, err := zip.NewReader(file, fileInfo.Size())
 				require.NoError(t, err)
 
-				shapefile, err := ReadFS(zipReader, tc.basename)
+				shapefile, err := ReadFS(zipReader, tc.basename, nil)
 				require.NoError(t, err)
 
 				testShapefile(t, shapefile)
 			})
 
 			t.Run("ReadZipFile", func(t *testing.T) {
-				shapefile, err := ReadZipFile(tc.filename)
+				shapefile, err := ReadZipFile(tc.filename, nil)
 				require.NoError(t, err)
 				testShapefile(t, shapefile)
 			})

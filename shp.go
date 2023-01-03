@@ -22,6 +22,7 @@ var (
 	errInvalidFileCode            = errors.New("invalid file code")
 	errInvalidFileLength          = errors.New("invalid file length")
 	errInvalidHeader              = errors.New("invalid header")
+	errInvalidNumberOfParts       = errors.New("invalid number of parts")
 	errInvalidRecordContentLength = errors.New("invalid record content length")
 	errInvalidRecordNumber        = errors.New("invalid record number")
 	errInvalidShapeType           = errors.New("invalid shape type")
@@ -36,12 +37,16 @@ type SHPRecord struct {
 	Geom          geom.T
 }
 
+type ReadSHPOptions struct {
+	MaxParts int
+}
+
 type SHP struct {
 	SHxHeader
 	Records []*SHPRecord
 }
 
-func ReadSHP(r io.Reader, fileLength int64) (*SHP, error) {
+func ReadSHP(r io.Reader, fileLength int64, options *ReadSHPOptions) (*SHP, error) {
 	header, err := ReadSHxHeader(r, fileLength)
 	if err != nil {
 		return nil, err
@@ -49,7 +54,7 @@ func ReadSHP(r io.Reader, fileLength int64) (*SHP, error) {
 	var records []*SHPRecord
 RECORD:
 	for recordNumber := 1; ; recordNumber++ {
-		switch record, err := ReadSHPRecord(r); {
+		switch record, err := ReadSHPRecord(r, options); {
 		case errors.Is(err, io.EOF):
 			break RECORD
 		case err != nil:
@@ -66,7 +71,7 @@ RECORD:
 	}, nil
 }
 
-func ReadSHPRecord(r io.Reader) (*SHPRecord, error) {
+func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 	recordHeaderData := make([]byte, 8)
 	if err := readFull(r, recordHeaderData); err != nil {
 		return nil, err
@@ -134,6 +139,12 @@ func ReadSHPRecord(r io.Reader) (*SHPRecord, error) {
 		fallthrough
 	case ShapeTypePolygon, ShapeTypePolygonM, ShapeTypePolygonZ:
 		numParts = byteSliceReader.readUint32()
+		if numParts == 0 {
+			return nil, errInvalidNumberOfParts
+		}
+		if options != nil && options.MaxParts != 0 && numParts > options.MaxParts {
+			return nil, errInvalidNumberOfParts
+		}
 		expectedContentLength += 4 + 4*numParts
 	}
 
@@ -203,13 +214,13 @@ func ReadSHPRecord(r io.Reader) (*SHPRecord, error) {
 	}, nil
 }
 
-func ReadSHPZipFile(zipFile *zip.File) (*SHP, error) {
+func ReadSHPZipFile(zipFile *zip.File, options *ReadSHPOptions) (*SHP, error) {
 	readCloser, err := zipFile.Open()
 	if err != nil {
 		return nil, err
 	}
 	defer readCloser.Close()
-	return ReadSHP(readCloser, int64(zipFile.UncompressedSize64))
+	return ReadSHP(readCloser, int64(zipFile.UncompressedSize64), options)
 }
 
 func (s *SHP) Record(i int) geom.T {

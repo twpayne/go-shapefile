@@ -79,7 +79,11 @@ type Shapefile struct {
 	SHX *SHX
 }
 
-func ReadFS(fsys fs.FS, basename string) (*Shapefile, error) {
+type ReadShapefileOptions struct {
+	SHP *ReadSHPOptions
+}
+
+func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapefile, error) {
 	var dbf *DBF
 	switch dbfFile, err := fsys.Open(basename + ".dbf"); {
 	case errors.Is(err, fs.ErrNotExist):
@@ -128,7 +132,11 @@ func ReadFS(fsys fs.FS, basename string) (*Shapefile, error) {
 		if err != nil {
 			return nil, err
 		}
-		shp, err = ReadSHP(shpFile, fileInfo.Size())
+		var readSHPOptions *ReadSHPOptions
+		if options != nil {
+			readSHPOptions = options.SHP
+		}
+		shp, err = ReadSHP(shpFile, fileInfo.Size(), readSHPOptions)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +168,7 @@ func ReadFS(fsys fs.FS, basename string) (*Shapefile, error) {
 	}, nil
 }
 
-func ReadZipFile(name string) (*Shapefile, error) {
+func ReadZipFile(name string, options *ReadShapefileOptions) (*Shapefile, error) {
 	file, err := os.Open(name)
 	if err != nil {
 		return nil, err
@@ -177,10 +185,10 @@ func ReadZipFile(name string) (*Shapefile, error) {
 		return nil, err
 	}
 
-	return ReadZipReader(zipReader)
+	return ReadZipReader(zipReader, options)
 }
 
-func ReadZipReader(zipReader *zip.Reader) (*Shapefile, error) {
+func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shapefile, error) {
 	var dbfFiles []*zip.File
 	var prjFiles []*zip.File
 	var shxFiles []*zip.File
@@ -231,8 +239,12 @@ func ReadZipReader(zipReader *zip.Reader) (*Shapefile, error) {
 	case 0:
 		// Do nothing.
 	case 1:
+		var readSHPOptions *ReadSHPOptions
+		if options != nil {
+			readSHPOptions = options.SHP
+		}
 		var err error
-		shp, err = ReadSHPZipFile(shpFiles[0])
+		shp, err = ReadSHPZipFile(shpFiles[0], readSHPOptions)
 		if err != nil {
 			return nil, err
 		}

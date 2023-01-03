@@ -13,6 +13,8 @@ func FuzzReadSHP(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		r := bytes.NewReader(data)
-		_, _ = ReadSHP(r, int64(len(data)))
+		_, _ = ReadSHP(r, int64(len(data)), &ReadSHPOptions{
+			MaxParts: 128,
+		})
 	})
 }
