@@ -128,9 +128,6 @@ func TestReadFS(t *testing.T) {
 			expectedDBFRecord0: []any{215229.266, 168, "35043411"},
 		},
 	} {
-		if tc.basename != "poly" {
-			continue
-		}
 		t.Run(tc.basename, func(t *testing.T) {
 			if tc.skipReason != "" {
 				t.Skip(tc.skipReason)
