@@ -49,9 +49,10 @@ var (
 
 	iso8859_1Decoder = charmap.ISO8859_1.NewDecoder()
 
-	errDBTFilesNotSupported  = errors.New(".DBT files are not supported")
-	errInvalidDateField      = errors.New("invalid date field")
-	errMemoFilesNotSupported = errors.New("memo files are not supported")
+	errDBTFilesNotSupported          = errors.New(".DBT files are not supported")
+	errInvalidDateField              = errors.New("invalid date field")
+	errMemoFilesNotSupported         = errors.New("memo files are not supported")
+	errTotalLengthRecordSizeMismatch = errors.New("total length of fields does not match record size")
 )
 
 // A DBFHeader is a DBF header.
@@ -85,16 +86,21 @@ type DBF struct {
 	Records          [][]any
 }
 
+type ReadDBFOptions struct {
+	MaxHeaderSize int
+	MaxRecordSize int
+}
+
 // A DBFMemo is a DBF memo.
 type DBFMemo string
 
 // ReadDBF reads a DBF file from r.
-func ReadDBF(r io.Reader, size int64) (*DBF, error) {
+func ReadDBF(r io.Reader, size int64, options *ReadDBFOptions) (*DBF, error) {
 	headerData := make([]byte, dbfHeaderLength)
 	if err := readFull(r, headerData); err != nil {
 		return nil, err
 	}
-	header, err := ParseDBFHeader(headerData)
+	header, err := ParseDBFHeader(headerData, options)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +138,14 @@ func ReadDBF(r io.Reader, size int64) (*DBF, error) {
 			SetFields:  setFields,
 		}
 		fieldDescriptors = append(fieldDescriptors, fieldDescriptor)
+	}
+
+	totalLength := 0
+	for _, fieldDescriptor := range fieldDescriptors {
+		totalLength += fieldDescriptor.Length
+	}
+	if totalLength+1 != header.RecordSize {
+		return nil, errTotalLengthRecordSizeMismatch
 	}
 
 	records := make([][]any, 0, header.Records)
@@ -177,7 +191,7 @@ func ReadDBF(r io.Reader, size int64) (*DBF, error) {
 }
 
 // ParseDBFHeader parses a DBFHeader from data.
-func ParseDBFHeader(data []byte) (*DBFHeader, error) {
+func ParseDBFHeader(data []byte, options *ReadDBFOptions) (*DBFHeader, error) {
 	if len(data) != dbfHeaderLength {
 		return nil, errInvalidHeader
 	}
@@ -204,10 +218,10 @@ func ParseDBFHeader(data []byte) (*DBFHeader, error) {
 	headerSize := int(binary.LittleEndian.Uint16(data[8:10]))
 	recordSize := int(binary.LittleEndian.Uint16(data[10:12]))
 
-	if headerSize > MaxRecordContentLength {
+	if options != nil && options.MaxHeaderSize != 0 && headerSize > options.MaxHeaderSize {
 		return nil, errors.New("header too large")
 	}
-	if recordSize > MaxRecordContentLength {
+	if options != nil && options.MaxRecordSize != 0 && recordSize > options.MaxRecordSize {
 		return nil, errors.New("records too large")
 	}
 
@@ -223,13 +237,13 @@ func ParseDBFHeader(data []byte) (*DBFHeader, error) {
 }
 
 // ReadDBFZipFile reads a DBF file from a *zip.File.
-func ReadDBFZipFile(zipFile *zip.File) (*DBF, error) {
+func ReadDBFZipFile(zipFile *zip.File, options *ReadDBFOptions) (*DBF, error) {
 	readCloser, err := zipFile.Open()
 	if err != nil {
 		return nil, err
 	}
 	defer readCloser.Close()
-	return ReadDBF(readCloser, int64(zipFile.UncompressedSize64))
+	return ReadDBF(readCloser, int64(zipFile.UncompressedSize64), options)
 }
 
 // Record returns the ith record.

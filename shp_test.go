@@ -14,7 +14,9 @@ func FuzzReadSHP(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		r := bytes.NewReader(data)
 		_, _ = ReadSHP(r, int64(len(data)), &ReadSHPOptions{
-			MaxParts: 128,
+			MaxParts:      128,
+			MaxPoints:     128,
+			MaxRecordSize: 4096,
 		})
 	})
 }
