@@ -80,6 +80,7 @@ type Shapefile struct {
 }
 
 type ReadShapefileOptions struct {
+	DBF *ReadDBFOptions
 	SHP *ReadSHPOptions
 }
 
@@ -96,7 +97,11 @@ func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapef
 		if err != nil {
 			return nil, err
 		}
-		dbf, err = ReadDBF(dbfFile, fileInfo.Size())
+		var readDBFOptions *ReadDBFOptions
+		if options != nil {
+			readDBFOptions = options.DBF
+		}
+		dbf, err = ReadDBF(dbfFile, fileInfo.Size(), readDBFOptions)
 		if err != nil {
 			return nil, err
 		}
@@ -211,8 +216,12 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 	case 0:
 		// Do nothing.
 	case 1:
+		var readDBFOptions *ReadDBFOptions
+		if options != nil {
+			readDBFOptions = options.DBF
+		}
 		var err error
-		dbf, err = ReadDBFZipFile(dbfFiles[0])
+		dbf, err = ReadDBFZipFile(dbfFiles[0], readDBFOptions)
 		if err != nil {
 			return nil, err
 		}

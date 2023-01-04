@@ -16,13 +16,12 @@ import (
 	"github.com/twpayne/go-geom"
 )
 
-var MaxRecordContentLength = 16 * 1024 * 1024
-
 var (
 	errInvalidFileCode            = errors.New("invalid file code")
 	errInvalidFileLength          = errors.New("invalid file length")
 	errInvalidHeader              = errors.New("invalid header")
 	errInvalidNumberOfParts       = errors.New("invalid number of parts")
+	errInvalidNumberOfPoints      = errors.New("invalid number of points")
 	errInvalidRecordContentLength = errors.New("invalid record content length")
 	errInvalidRecordNumber        = errors.New("invalid record number")
 	errInvalidShapeType           = errors.New("invalid shape type")
@@ -38,7 +37,9 @@ type SHPRecord struct {
 }
 
 type ReadSHPOptions struct {
-	MaxParts int
+	MaxParts      int
+	MaxPoints     int
+	MaxRecordSize int
 }
 
 type SHP struct {
@@ -78,7 +79,10 @@ func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 	}
 	recordNumber := int(binary.BigEndian.Uint32(recordHeaderData[:4]))
 	contentLength := 2 * int(binary.BigEndian.Uint32(recordHeaderData[4:8]))
-	if contentLength < 4 || contentLength > MaxRecordContentLength {
+	if contentLength < 4 {
+		return nil, errInvalidRecordContentLength
+	}
+	if options != nil && options.MaxRecordSize != 0 && contentLength > options.MaxRecordSize {
 		return nil, errInvalidRecordContentLength
 	}
 
@@ -149,6 +153,9 @@ func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 	}
 
 	numPoints := byteSliceReader.readUint32()
+	if options != nil && options.MaxPoints != 0 && numPoints > options.MaxPoints {
+		return nil, errInvalidNumberOfPoints
+	}
 	expectedContentLength += 4
 
 	switch layout {

@@ -13,6 +13,9 @@ func FuzzReadDBF(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		r := bytes.NewReader(data)
-		_, _ = ReadDBF(r, int64(len(data)))
+		_, _ = ReadDBF(r, int64(len(data)), &ReadDBFOptions{
+			MaxHeaderSize: 4096,
+			MaxRecordSize: 4096,
+		})
 	})
 }
