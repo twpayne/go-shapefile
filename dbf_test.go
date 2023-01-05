@@ -16,6 +16,7 @@ func FuzzReadDBF(f *testing.F) {
 		_, _ = ReadDBF(r, int64(len(data)), &ReadDBFOptions{
 			MaxHeaderSize: 4096,
 			MaxRecordSize: 4096,
+			MaxRecords:    4096,
 		})
 	})
 }
