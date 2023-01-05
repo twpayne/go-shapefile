@@ -52,6 +52,7 @@ var (
 	errDBTFilesNotSupported          = errors.New(".DBT files are not supported")
 	errInvalidDateField              = errors.New("invalid date field")
 	errMemoFilesNotSupported         = errors.New("memo files are not supported")
+	errTooManyRecords                = errors.New("too many records")
 	errTotalLengthRecordSizeMismatch = errors.New("total length of fields does not match record size")
 )
 
@@ -89,6 +90,7 @@ type DBF struct {
 type ReadDBFOptions struct {
 	MaxHeaderSize int
 	MaxRecordSize int
+	MaxRecords    int
 }
 
 // A DBFMemo is a DBF memo.
@@ -215,6 +217,10 @@ func ParseDBFHeader(data []byte, options *ReadDBFOptions) (*DBFHeader, error) {
 	lastUpdate := time.Date(lastUpdateYear, lastUpdateMonth, lastUpdateDay, 0, 0, 0, 0, time.UTC)
 
 	records := int(binary.LittleEndian.Uint32(data[4:8]))
+	if options != nil && options.MaxRecords != 0 && records > options.MaxRecords {
+		return nil, errTooManyRecords
+	}
+
 	headerSize := int(binary.LittleEndian.Uint16(data[8:10]))
 	recordSize := int(binary.LittleEndian.Uint16(data[10:12]))
 
