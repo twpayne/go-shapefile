@@ -48,12 +48,6 @@ var (
 	}
 
 	iso8859_1Decoder = charmap.ISO8859_1.NewDecoder()
-
-	errDBTFilesNotSupported          = errors.New(".DBT files are not supported")
-	errInvalidDateField              = errors.New("invalid date field")
-	errMemoFilesNotSupported         = errors.New("memo files are not supported")
-	errTooManyRecords                = errors.New("too many records")
-	errTotalLengthRecordSizeMismatch = errors.New("total length of fields does not match record size")
 )
 
 // A DBFHeader is a DBF header.
@@ -147,7 +141,7 @@ func ReadDBF(r io.Reader, size int64, options *ReadDBFOptions) (*DBF, error) {
 		totalLength += fieldDescriptor.Length
 	}
 	if totalLength+1 != header.RecordSize {
-		return nil, errTotalLengthRecordSizeMismatch
+		return nil, errors.New("invalid total length of fields")
 	}
 
 	records := make([][]any, 0, header.Records)
@@ -195,7 +189,7 @@ func ReadDBF(r io.Reader, size int64, options *ReadDBFOptions) (*DBF, error) {
 // ParseDBFHeader parses a DBFHeader from data.
 func ParseDBFHeader(data []byte, options *ReadDBFOptions) (*DBFHeader, error) {
 	if len(data) != dbfHeaderLength {
-		return nil, errInvalidHeader
+		return nil, errors.New("invalid header length")
 	}
 
 	version := int(data[0]) & 0x7
@@ -204,11 +198,11 @@ func ParseDBFHeader(data []byte, options *ReadDBFOptions) (*DBFHeader, error) {
 	}
 	memo := int(data[0])&0x8 == 0x8
 	if memo {
-		return nil, errMemoFilesNotSupported
+		return nil, errors.New("memo files not supported")
 	}
 	dbt := int(data[0])&0x80 == 0x80
 	if dbt {
-		return nil, errDBTFilesNotSupported
+		return nil, errors.New(".DBT files are not supported")
 	}
 
 	lastUpdateYear := int(data[1]) + 1900
@@ -218,15 +212,15 @@ func ParseDBFHeader(data []byte, options *ReadDBFOptions) (*DBFHeader, error) {
 
 	records := int(binary.LittleEndian.Uint32(data[4:8]))
 	if options != nil && options.MaxRecords != 0 && records > options.MaxRecords {
-		return nil, errTooManyRecords
+		return nil, errors.New("too many records")
 	}
 
 	headerSize := int(binary.LittleEndian.Uint16(data[8:10]))
-	recordSize := int(binary.LittleEndian.Uint16(data[10:12]))
-
 	if options != nil && options.MaxHeaderSize != 0 && headerSize > options.MaxHeaderSize {
 		return nil, errors.New("header too large")
 	}
+
+	recordSize := int(binary.LittleEndian.Uint16(data[10:12]))
 	if options != nil && options.MaxRecordSize != 0 && recordSize > options.MaxRecordSize {
 		return nil, errors.New("records too large")
 	}
@@ -301,7 +295,7 @@ func parseCharacter(data []byte) (string, error) {
 
 func parseDate(data []byte) (time.Time, error) {
 	if len(data) != 8 {
-		return time.Time{}, errInvalidDateField
+		return time.Time{}, errors.New("invalid date field length")
 	}
 	year, err := strconv.ParseInt(string(data[:4]), 10, 64)
 	if err != nil {
