@@ -16,18 +16,6 @@ import (
 	"github.com/twpayne/go-geom"
 )
 
-var (
-	errInvalidFileCode            = errors.New("invalid file code")
-	errInvalidFileLength          = errors.New("invalid file length")
-	errInvalidHeader              = errors.New("invalid header")
-	errInvalidNumberOfParts       = errors.New("invalid number of parts")
-	errInvalidNumberOfPoints      = errors.New("invalid number of points")
-	errInvalidRecordContentLength = errors.New("invalid record content length")
-	errInvalidRecordNumber        = errors.New("invalid record number")
-	errInvalidShapeType           = errors.New("invalid shape type")
-	errInvalidVersion             = errors.New("invalid version")
-)
-
 type SHPRecord struct {
 	Number        int
 	ContentLength int
@@ -61,7 +49,7 @@ RECORD:
 		case err != nil:
 			return nil, fmt.Errorf("record %d: %w", recordNumber, err)
 		case record.Number != recordNumber:
-			return nil, fmt.Errorf("record %d: %w", recordNumber, errInvalidRecordNumber)
+			return nil, fmt.Errorf("record %d: invalid record number", recordNumber)
 		default:
 			records = append(records, record)
 		}
@@ -80,10 +68,10 @@ func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 	recordNumber := int(binary.BigEndian.Uint32(recordHeaderData[:4]))
 	contentLength := 2 * int(binary.BigEndian.Uint32(recordHeaderData[4:8]))
 	if contentLength < 4 {
-		return nil, errInvalidRecordContentLength
+		return nil, errors.New("content length too short")
 	}
 	if options != nil && options.MaxRecordSize != 0 && contentLength > options.MaxRecordSize {
-		return nil, errInvalidRecordContentLength
+		return nil, errors.New("content length too large")
 	}
 
 	recordData := make([]byte, contentLength)
@@ -98,7 +86,7 @@ func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 
 	if shapeType == ShapeTypeNull {
 		if contentLength != expectedContentLength {
-			return nil, errInvalidRecordContentLength
+			return nil, errors.New("invalid content length")
 		}
 		return &SHPRecord{
 			Number:        recordNumber,
@@ -123,7 +111,7 @@ func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 		flatCoords := byteSliceReader.readFloat64s(layout.Stride())
 		expectedContentLength += 8 * layout.Stride()
 		if contentLength != expectedContentLength {
-			return nil, errInvalidRecordContentLength
+			return nil, errors.New("invalid content length")
 		}
 		return &SHPRecord{
 			Number:        recordNumber,
@@ -144,17 +132,17 @@ func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 	case ShapeTypePolygon, ShapeTypePolygonM, ShapeTypePolygonZ:
 		numParts = byteSliceReader.readUint32()
 		if numParts == 0 {
-			return nil, errInvalidNumberOfParts
+			return nil, errors.New("invalid number of parts")
 		}
 		if options != nil && options.MaxParts != 0 && numParts > options.MaxParts {
-			return nil, errInvalidNumberOfParts
+			return nil, errors.New("too many parts")
 		}
 		expectedContentLength += 4 + 4*numParts
 	}
 
 	numPoints := byteSliceReader.readUint32()
 	if options != nil && options.MaxPoints != 0 && numPoints > options.MaxPoints {
-		return nil, errInvalidNumberOfPoints
+		return nil, errors.New("too many points")
 	}
 	expectedContentLength += 4
 
@@ -168,7 +156,7 @@ func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 	}
 
 	if contentLength != expectedContentLength {
-		return nil, errInvalidRecordContentLength
+		return nil, errors.New("invalid content length")
 	}
 
 	var ends []int

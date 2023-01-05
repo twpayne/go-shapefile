@@ -55,22 +55,27 @@ const (
 	ShapeTypeMultiPatch  ShapeType = 31
 )
 
-var knownShapeTypes = map[ShapeType]struct{}{
-	ShapeTypeNull:        {},
-	ShapeTypePoint:       {},
-	ShapeTypePolyLine:    {},
-	ShapeTypePolygon:     {},
-	ShapeTypeMultiPoint:  {},
-	ShapeTypePointM:      {},
-	ShapeTypePolyLineM:   {},
-	ShapeTypePolygonM:    {},
-	ShapeTypeMultiPointM: {},
-	ShapeTypePointZ:      {},
-	ShapeTypePolyLineZ:   {},
-	ShapeTypePolygonZ:    {},
-	ShapeTypeMultiPointZ: {},
-	// ShapeTypeMultiPatch:  {}, // FIXME
-}
+var (
+	validShapeTypes = map[ShapeType]struct{}{
+		ShapeTypeNull:        {},
+		ShapeTypePoint:       {},
+		ShapeTypePolyLine:    {},
+		ShapeTypePolygon:     {},
+		ShapeTypeMultiPoint:  {},
+		ShapeTypePointM:      {},
+		ShapeTypePolyLineM:   {},
+		ShapeTypePolygonM:    {},
+		ShapeTypeMultiPointM: {},
+		ShapeTypePointZ:      {},
+		ShapeTypePolyLineZ:   {},
+		ShapeTypePolygonZ:    {},
+		ShapeTypeMultiPointZ: {},
+		ShapeTypeMultiPatch:  {},
+	}
+	unsupportedShapeTypes = map[ShapeType]struct{}{
+		ShapeTypeMultiPatch: {}, // FIXME
+	}
+)
 
 type Shapefile struct {
 	DBF *DBF
@@ -226,7 +231,7 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 			return nil, err
 		}
 	default:
-		return nil, errors.New("multiple .dbf files") // FIXME
+		return nil, errors.New("too many .dbf files")
 	}
 
 	var prj *PRJ
@@ -240,7 +245,7 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 			return nil, err
 		}
 	default:
-		return nil, errors.New("multiple .prj files") // FIXME
+		return nil, errors.New("too many .prj files")
 	}
 
 	var shp *SHP
@@ -258,7 +263,7 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 			return nil, err
 		}
 	default:
-		return nil, errors.New("multiple .shp files") // FIXME
+		return nil, errors.New("too many .shp files")
 	}
 
 	var shx *SHX
@@ -272,7 +277,7 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 			return nil, err
 		}
 	default:
-		return nil, errors.New("multiple .shx files") // FIXME
+		return nil, errors.New("too many .shx files")
 	}
 
 	return &Shapefile{
@@ -297,7 +302,7 @@ func (s *Shapefile) Record(i int) (map[string]any, geom.T) {
 
 func ReadSHxHeader(r io.Reader, fileLength int64) (*SHxHeader, error) {
 	if fileLength < headerSize {
-		return nil, errInvalidHeader
+		return nil, errors.New("file too short")
 	}
 	data := make([]byte, headerSize)
 	if err := readFull(r, data); err != nil {
@@ -308,21 +313,24 @@ func ReadSHxHeader(r io.Reader, fileLength int64) (*SHxHeader, error) {
 
 func ParseSHxHeader(data []byte, fileLength int64) (*SHxHeader, error) {
 	if len(data) != headerSize {
-		return nil, errInvalidFileLength
+		return nil, errors.New("invalid header length")
 	}
 	if headerFileCode := binary.BigEndian.Uint32(data[:4]); headerFileCode != fileCode {
-		return nil, errInvalidFileCode
+		return nil, errors.New("invalid file code")
 	}
 	if headerFileLength := 2 * int64(binary.BigEndian.Uint32(data[24:28])); headerFileLength != fileLength {
-		return nil, errInvalidFileLength
+		return nil, errors.New("invalid file length")
 	}
 	if headerVersion := binary.LittleEndian.Uint32(data[28:32]); headerVersion != version {
-		return nil, errInvalidVersion
+		return nil, errors.New("invalid header version")
 	}
 
 	shapeType := ShapeType(binary.LittleEndian.Uint32(data[32:36]))
-	if _, ok := knownShapeTypes[shapeType]; !ok {
-		return nil, errInvalidShapeType
+	if _, validShapeType := validShapeTypes[shapeType]; !validShapeType {
+		return nil, errors.New("invalid shape type")
+	}
+	if _, unsupportedShapeType := unsupportedShapeTypes[shapeType]; unsupportedShapeType {
+		return nil, errors.New("unsupported shape type")
 	}
 
 	minX := math.Float64frombits(binary.LittleEndian.Uint64(data[36:44]))
