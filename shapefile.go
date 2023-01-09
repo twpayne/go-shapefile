@@ -14,6 +14,7 @@ import (
 	"archive/zip"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"math"
@@ -108,7 +109,7 @@ func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapef
 		}
 		dbf, err = ReadDBF(dbfFile, fileInfo.Size(), readDBFOptions)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s.dbf: %w", basename, err)
 		}
 	}
 
@@ -126,7 +127,7 @@ func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapef
 		}
 		prj, err = ReadPRJ(prjFile, fileInfo.Size())
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s.prj: %w", basename, err)
 		}
 	}
 
@@ -148,7 +149,7 @@ func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapef
 		}
 		shp, err = ReadSHP(shpFile, fileInfo.Size(), readSHPOptions)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s.shp: %w", basename, err)
 		}
 	}
 
@@ -166,7 +167,7 @@ func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapef
 		}
 		shx, err = ReadSHX(shxFile, fileInfo.Size())
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s.shx: %w", basename, err)
 		}
 	}
 
@@ -195,7 +196,11 @@ func ReadZipFile(name string, options *ReadShapefileOptions) (*Shapefile, error)
 		return nil, err
 	}
 
-	return ReadZipReader(zipReader, options)
+	shapefile, err := ReadZipReader(zipReader, options)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
+	}
+	return shapefile, nil
 }
 
 func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shapefile, error) {
@@ -402,7 +407,7 @@ func readFull(r io.Reader, data []byte) error {
 		case err != nil:
 			return err
 		case n == 0:
-			return io.EOF
+			return io.ErrUnexpectedEOF
 		case n < len(data):
 			data = data[n:]
 		default:
