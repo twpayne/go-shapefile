@@ -6,6 +6,7 @@ package shapefile
 import (
 	"archive/zip"
 	"encoding/binary"
+	"fmt"
 	"io"
 )
 
@@ -49,7 +50,11 @@ func ReadSHXZipFile(zipFile *zip.File) (*SHX, error) {
 		return nil, err
 	}
 	defer readCloser.Close()
-	return ReadSHX(readCloser, int64(zipFile.UncompressedSize64))
+	shx, err := ReadSHX(readCloser, int64(zipFile.UncompressedSize64))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", zipFile.Name, err)
+	}
+	return shx, nil
 }
 
 func ParseSHXRecord(data []byte) SHXRecord {

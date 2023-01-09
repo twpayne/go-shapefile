@@ -245,7 +245,11 @@ func ReadDBFZipFile(zipFile *zip.File, options *ReadDBFOptions) (*DBF, error) {
 		return nil, err
 	}
 	defer readCloser.Close()
-	return ReadDBF(readCloser, int64(zipFile.UncompressedSize64), options)
+	dbf, err := ReadDBF(readCloser, int64(zipFile.UncompressedSize64), options)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", zipFile.Name, err)
+	}
+	return dbf, nil
 }
 
 // Record returns the ith record.

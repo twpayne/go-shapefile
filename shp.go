@@ -215,7 +215,11 @@ func ReadSHPZipFile(zipFile *zip.File, options *ReadSHPOptions) (*SHP, error) {
 		return nil, err
 	}
 	defer readCloser.Close()
-	return ReadSHP(readCloser, int64(zipFile.UncompressedSize64), options)
+	shp, err := ReadSHP(readCloser, int64(zipFile.UncompressedSize64), options)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", zipFile.Name, err)
+	}
+	return shp, nil
 }
 
 func (s *SHP) Record(i int) geom.T {

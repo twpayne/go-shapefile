@@ -4,6 +4,7 @@ package shapefile
 
 import (
 	"archive/zip"
+	"fmt"
 	"io"
 )
 
@@ -28,5 +29,9 @@ func ReadPRJZipFile(zipFile *zip.File) (*PRJ, error) {
 		return nil, err
 	}
 	defer readCloser.Close()
-	return ReadPRJ(readCloser, int64(zipFile.UncompressedSize64))
+	prj, err := ReadPRJ(readCloser, int64(zipFile.UncompressedSize64))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", zipFile.Name, err)
+	}
+	return prj, nil
 }
