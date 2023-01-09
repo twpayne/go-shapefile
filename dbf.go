@@ -172,10 +172,12 @@ func ReadDBF(r io.Reader, size int64, options *ReadDBFOptions) (*DBF, error) {
 	}
 
 	data := make([]byte, 1)
-	if err := readFull(r, data); err != nil {
+	switch err := readFull(r, data); {
+	case errors.Is(err, io.EOF):
+		// Ignore missing end of file marker.
+	case err != nil:
 		return nil, err
-	}
-	if data[0] != '\x1a' {
+	case data[0] != '\x1a':
 		return nil, fmt.Errorf("%d: invalid end of file marker", data[0])
 	}
 
