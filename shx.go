@@ -23,7 +23,7 @@ type SHXRecord struct {
 
 // ReadSHX reads a SHX from an io.Reader.
 func ReadSHX(r io.Reader, size int64) (*SHX, error) {
-	header, err := ReadSHxHeader(r, size)
+	header, err := readSHxHeader(r, size)
 	if err != nil {
 		return nil, err
 	}
