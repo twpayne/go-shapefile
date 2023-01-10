@@ -84,6 +84,98 @@ type ReadShapefileOptions struct {
 	SHP *ReadSHPOptions
 }
 
+// Read reads a Shapefile from basename.
+func Read(basename string, options *ReadShapefileOptions) (*Shapefile, error) {
+	if options == nil {
+		options = &ReadShapefileOptions{}
+	}
+
+	var dbf *DBF
+	dbfFile, dbfSize, err := openWithSize(basename + ".dbf")
+	if dbfFile != nil {
+		defer dbfFile.Close()
+	}
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// Do nothing.
+	case err != nil:
+		return nil, fmt.Errorf("%s.dbf: %w", basename, err)
+	default:
+		var err error
+		dbf, err = ReadDBF(dbfFile, dbfSize, options.DBF)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var prj *PRJ
+	prjFile, prjSize, err := openWithSize(basename + ".prj")
+	if prjFile != nil {
+		defer prjFile.Close()
+	}
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// Do nothing.
+	case err != nil:
+		return nil, fmt.Errorf("%s.prj: %w", basename, err)
+	default:
+		var err error
+		prj, err = ReadPRJ(prjFile, prjSize)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var shx *SHX
+	shxFile, shxSize, err := openWithSize(basename + ".shx")
+	if shxFile != nil {
+		defer shxFile.Close()
+	}
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// Do nothing.
+	case err != nil:
+		return nil, fmt.Errorf("%s.shx: %w", basename, err)
+	default:
+		var err error
+		shx, err = ReadSHX(shxFile, shxSize)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var shp *SHP
+	shpFile, shpSize, err := openWithSize(basename + ".shp")
+	if shpFile != nil {
+		defer shpFile.Close()
+	}
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// Do nothing.
+	case err != nil:
+		return nil, fmt.Errorf("%s.shp: %w", basename, err)
+	default:
+		var err error
+		shp, err = ReadSHP(shpFile, shpSize, options.SHP)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if dbf != nil && shp != nil && len(dbf.Records) != len(shp.Records) ||
+		dbf != nil && shx != nil && len(dbf.Records) != len(shx.Records) ||
+		shp != nil && shx != nil && len(shp.Records) != len(shx.Records) {
+		return nil, errors.New("inconsistent number of records")
+	}
+
+	return &Shapefile{
+		DBF: dbf,
+		PRJ: prj,
+		SHP: shp,
+		SHX: shx,
+	}, nil
+}
+
 // ReadFS reads a Shapefile from fsys with the given basename.
 func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapefile, error) {
 	var dbf *DBF
@@ -321,4 +413,16 @@ func (s *Shapefile) Record(i int) (map[string]any, geom.T) {
 		g = s.SHP.Record(i)
 	}
 	return fields, g
+}
+
+func openWithSize(name string) (*os.File, int64, error) {
+	file, err := os.Open(name)
+	if err != nil {
+		return nil, 0, err
+	}
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, 0, err
+	}
+	return file, fileInfo.Size(), nil
 }
