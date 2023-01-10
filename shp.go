@@ -39,7 +39,7 @@ type SHP struct {
 
 // ReadSHP reads a SHP from an io.Reader.
 func ReadSHP(r io.Reader, fileLength int64, options *ReadSHPOptions) (*SHP, error) {
-	header, err := ReadSHxHeader(r, fileLength)
+	header, err := readSHxHeader(r, fileLength)
 	if err != nil {
 		return nil, err
 	}
