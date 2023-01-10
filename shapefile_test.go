@@ -137,37 +137,71 @@ func TestReadFS(t *testing.T) {
 				t.Skip(tc.skipReason)
 			}
 
-			shapefile, err := ReadFS(os.DirFS("testdata"), tc.basename, nil)
-			if tc.expectedErr != "" {
-				require.Error(t, err, tc.expectedErr)
-			}
-			require.NoError(t, err)
+			t.Run("Read", func(t *testing.T) {
+				shapefile, err := Read(filepath.Join("testdata", tc.basename), nil)
+				require.NoError(t, err)
+				require.NotNil(t, shapefile)
 
-			assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
-			assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
-			assert.Equal(t, tc.expectedNumRecords, shapefile.NumRecords())
-			assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
+				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
+				assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
+				assert.Equal(t, tc.expectedNumRecords, shapefile.NumRecords())
+				assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
 
-			if tc.hasDBF {
-				assert.Len(t, shapefile.DBF.Records, tc.expectedNumRecords)
-				assert.Equal(t, tc.expectedDBFRecord0, shapefile.DBF.Records[0])
-			} else {
-				assert.Nil(t, shapefile.DBF)
-			}
+				if tc.hasDBF {
+					assert.Len(t, shapefile.DBF.Records, tc.expectedNumRecords)
+					assert.Equal(t, tc.expectedDBFRecord0, shapefile.DBF.Records[0])
+				} else {
+					assert.Nil(t, shapefile.DBF)
+				}
 
-			if tc.hasPRJ {
-				assert.NotNil(t, shapefile.PRJ)
-			} else {
-				assert.Nil(t, shapefile.PRJ)
-			}
+				if tc.hasPRJ {
+					assert.NotNil(t, shapefile.PRJ)
+				} else {
+					assert.Nil(t, shapefile.PRJ)
+				}
 
-			if tc.hasSHX {
-				assert.Equal(t, tc.expectedShapeType, shapefile.SHX.ShapeType)
-				assert.Equal(t, tc.expectedBounds, shapefile.SHX.Bounds)
-				assert.Len(t, shapefile.SHX.Records, tc.expectedNumRecords)
-			} else {
-				assert.Nil(t, shapefile.SHX)
-			}
+				if tc.hasSHX {
+					assert.Equal(t, tc.expectedShapeType, shapefile.SHX.ShapeType)
+					assert.Equal(t, tc.expectedBounds, shapefile.SHX.Bounds)
+					assert.Len(t, shapefile.SHX.Records, tc.expectedNumRecords)
+				} else {
+					assert.Nil(t, shapefile.SHX)
+				}
+			})
+
+			t.Run("ReadFS", func(t *testing.T) {
+				shapefile, err := ReadFS(os.DirFS("testdata"), tc.basename, nil)
+				if tc.expectedErr != "" {
+					require.Error(t, err, tc.expectedErr)
+				}
+				require.NoError(t, err)
+
+				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
+				assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
+				assert.Equal(t, tc.expectedNumRecords, shapefile.NumRecords())
+				assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
+
+				if tc.hasDBF {
+					assert.Len(t, shapefile.DBF.Records, tc.expectedNumRecords)
+					assert.Equal(t, tc.expectedDBFRecord0, shapefile.DBF.Records[0])
+				} else {
+					assert.Nil(t, shapefile.DBF)
+				}
+
+				if tc.hasPRJ {
+					assert.NotNil(t, shapefile.PRJ)
+				} else {
+					assert.Nil(t, shapefile.PRJ)
+				}
+
+				if tc.hasSHX {
+					assert.Equal(t, tc.expectedShapeType, shapefile.SHX.ShapeType)
+					assert.Equal(t, tc.expectedBounds, shapefile.SHX.Bounds)
+					assert.Len(t, shapefile.SHX.Records, tc.expectedNumRecords)
+				} else {
+					assert.Nil(t, shapefile.SHX)
+				}
+			})
 		})
 	}
 }
