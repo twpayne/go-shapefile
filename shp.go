@@ -1,6 +1,5 @@
 package shapefile
 
-// FIXME document all exported types
 // FIXME validate XYZ and XYZM code
 // FIXME do more validation, especially against the length of the file
 // FIXME use .shx indexes
@@ -16,6 +15,7 @@ import (
 	"github.com/twpayne/go-geom"
 )
 
+// A SHPRecord is a record in a SHP file.
 type SHPRecord struct {
 	Number        int
 	ContentLength int
@@ -24,17 +24,20 @@ type SHPRecord struct {
 	Geom          geom.T
 }
 
+// ReadSHPOptions are options for ReadSHP.
 type ReadSHPOptions struct {
 	MaxParts      int
 	MaxPoints     int
 	MaxRecordSize int
 }
 
+// A SHP is a .shp file.
 type SHP struct {
 	SHxHeader
 	Records []*SHPRecord
 }
 
+// ReadSHP reads a SHP from an io.Reader.
 func ReadSHP(r io.Reader, fileLength int64, options *ReadSHPOptions) (*SHP, error) {
 	header, err := ReadSHxHeader(r, fileLength)
 	if err != nil {
@@ -60,6 +63,7 @@ RECORD:
 	}, nil
 }
 
+// ReadSHPRecord reads the next *SHPRecord from r.
 func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 	recordHeaderData := make([]byte, 8)
 	if err := readFull(r, recordHeaderData); err != nil {
@@ -209,6 +213,7 @@ func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 	}, nil
 }
 
+// ReadSHPZipFile reads a *SHP from a *zip.File.
 func ReadSHPZipFile(zipFile *zip.File, options *ReadSHPOptions) (*SHP, error) {
 	readCloser, err := zipFile.Open()
 	if err != nil {
@@ -222,6 +227,7 @@ func ReadSHPZipFile(zipFile *zip.File, options *ReadSHPOptions) (*SHP, error) {
 	return shp, nil
 }
 
+// Record returns the ith geometry.
 func (s *SHP) Record(i int) geom.T {
 	return s.Records[i].Geom
 }

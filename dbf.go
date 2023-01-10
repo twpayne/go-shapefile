@@ -81,6 +81,7 @@ type DBF struct {
 	Records          [][]any
 }
 
+// ReadDBFOptions are options to ReadDBF.
 type ReadDBFOptions struct {
 	MaxHeaderSize int
 	MaxRecordSize int
@@ -90,7 +91,7 @@ type ReadDBFOptions struct {
 // A DBFMemo is a DBF memo.
 type DBFMemo string
 
-// ReadDBF reads a DBF file from r.
+// ReadDBF reads a DBF from an io.Reader.
 func ReadDBF(r io.Reader, size int64, options *ReadDBFOptions) (*DBF, error) {
 	headerData := make([]byte, dbfHeaderLength)
 	if err := readFull(r, headerData); err != nil {
@@ -238,7 +239,7 @@ func ParseDBFHeader(data []byte, options *ReadDBFOptions) (*DBFHeader, error) {
 	}, nil
 }
 
-// ReadDBFZipFile reads a DBF file from a *zip.File.
+// ReadDBFZipFile reads a DBF from a *zip.File.
 func ReadDBFZipFile(zipFile *zip.File, options *ReadDBFOptions) (*DBF, error) {
 	readCloser, err := zipFile.Open()
 	if err != nil {

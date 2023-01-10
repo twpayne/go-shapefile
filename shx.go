@@ -1,6 +1,5 @@
 package shapefile
 
-// FIXME document all exported types
 // FIXME do more validation, especially against the length of the file
 
 import (
@@ -10,16 +9,19 @@ import (
 	"io"
 )
 
+// An SHX is a .shx file.
 type SHX struct {
 	SHxHeader
 	Records []SHXRecord
 }
 
+// An SHXRecord is a record in a SHX.
 type SHXRecord struct {
 	Offset        int
 	ContentLength int
 }
 
+// ReadSHX reads a SHX from an io.Reader.
 func ReadSHX(r io.Reader, size int64) (*SHX, error) {
 	header, err := ReadSHxHeader(r, size)
 	if err != nil {
@@ -44,6 +46,7 @@ func ReadSHX(r io.Reader, size int64) (*SHX, error) {
 	}, nil
 }
 
+// ReadSHXZipFile reads a SHX from a *zip.File.
 func ReadSHXZipFile(zipFile *zip.File) (*SHX, error) {
 	readCloser, err := zipFile.Open()
 	if err != nil {
@@ -57,6 +60,7 @@ func ReadSHXZipFile(zipFile *zip.File) (*SHX, error) {
 	return shx, nil
 }
 
+// ParseSHXRecord parses a SHXRecord from data.
 func ParseSHXRecord(data []byte) SHXRecord {
 	offset := 2 * int(binary.BigEndian.Uint32(data[:4]))
 	contentLength := 2 * int(binary.BigEndian.Uint32(data[4:]))
