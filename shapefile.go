@@ -3,11 +3,7 @@
 // See https://support.esri.com/en/white-paper/279.
 package shapefile
 
-// FIXME make everything robust to malicious inputs
-// FIXME fuzz testing
-// FIXME tidy up errors
 // FIXME provide lazy, random access to individual records, using SHX
-// FIXME cross-file validation of offsets and record lengths
 
 import (
 	"archive/zip"
