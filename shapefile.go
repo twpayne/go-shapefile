@@ -3,7 +3,6 @@
 // See https://support.esri.com/en/white-paper/279.
 package shapefile
 
-// FIXME document all exported types
 // FIXME make everything robust to malicious inputs
 // FIXME fuzz testing
 // FIXME tidy up errors
@@ -31,11 +30,13 @@ const (
 	version    = 1000
 )
 
+// A SHxHeader is header of a .shp or .shx file.
 type SHxHeader struct {
 	ShapeType ShapeType
 	Bounds    *geom.Bounds
 }
 
+// A ShapeType is a shape type.
 type ShapeType uint
 
 // Shape types.
@@ -78,6 +79,7 @@ var (
 	}
 )
 
+// A Shapefile is an ESRI Shapefile.
 type Shapefile struct {
 	DBF *DBF
 	PRJ *PRJ
@@ -85,11 +87,13 @@ type Shapefile struct {
 	SHX *SHX
 }
 
+// ReadShapefileOptions are options to ReadFS.
 type ReadShapefileOptions struct {
 	DBF *ReadDBFOptions
 	SHP *ReadSHPOptions
 }
 
+// ReadFS reads a Shapefile from fsys with the given basename.
 func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapefile, error) {
 	var dbf *DBF
 	switch dbfFile, err := fsys.Open(basename + ".dbf"); {
@@ -179,6 +183,7 @@ func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapef
 	}, nil
 }
 
+// ReadZipFile reads a Shapefile from a .zip file.
 func ReadZipFile(name string, options *ReadShapefileOptions) (*Shapefile, error) {
 	file, err := os.Open(name)
 	if err != nil {
@@ -203,6 +208,7 @@ func ReadZipFile(name string, options *ReadShapefileOptions) (*Shapefile, error)
 	return shapefile, nil
 }
 
+// ReadZipReader reads a Shapefile from a *zip.Reader.
 func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shapefile, error) {
 	var dbfFiles []*zip.File
 	var prjFiles []*zip.File
@@ -299,6 +305,7 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 	}, nil
 }
 
+// NumRecords returns the number of records in s.
 func (s *Shapefile) NumRecords() int {
 	switch {
 	case s.DBF != nil:
@@ -312,6 +319,7 @@ func (s *Shapefile) NumRecords() int {
 	}
 }
 
+// Record returns s's ith record's fields and geometry.
 func (s *Shapefile) Record(i int) (map[string]any, geom.T) {
 	var fields map[string]any
 	if s.DBF != nil {
@@ -324,6 +332,7 @@ func (s *Shapefile) Record(i int) (map[string]any, geom.T) {
 	return fields, g
 }
 
+// ReadSHxHeader reads a SHxHeader from an io.Reader.
 func ReadSHxHeader(r io.Reader, fileLength int64) (*SHxHeader, error) {
 	if fileLength < headerSize {
 		return nil, errors.New("file too short")
@@ -335,6 +344,7 @@ func ReadSHxHeader(r io.Reader, fileLength int64) (*SHxHeader, error) {
 	return ParseSHxHeader(data, fileLength)
 }
 
+// ParseSHxHeader parses a SHxHeader from data.
 func ParseSHxHeader(data []byte, fileLength int64) (*SHxHeader, error) {
 	if len(data) != headerSize {
 		return nil, errors.New("invalid header length")
@@ -414,6 +424,7 @@ func ParseSHxHeader(data []byte, fileLength int64) (*SHxHeader, error) {
 	}, nil
 }
 
+// NoData returns if x represents no data.
 func NoData(x float64) bool {
 	return x <= -1e38
 }

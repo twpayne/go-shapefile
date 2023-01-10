@@ -1,17 +1,17 @@
 package shapefile
 
-// FIXME document all exported types
-
 import (
 	"archive/zip"
 	"fmt"
 	"io"
 )
 
+// A PRJ is a .prj file.
 type PRJ struct {
 	Projection string
 }
 
+// ReadPRJ reads a PRJ from an io.Reader.
 func ReadPRJ(r io.Reader, size int64) (*PRJ, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -23,6 +23,7 @@ func ReadPRJ(r io.Reader, size int64) (*PRJ, error) {
 	}, nil
 }
 
+// ReadPRJZipFile reads a PRJ from a *zip.File.
 func ReadPRJZipFile(zipFile *zip.File) (*PRJ, error) {
 	readCloser, err := zipFile.Open()
 	if err != nil {
