@@ -299,6 +299,19 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 	}, nil
 }
 
+func (s *Shapefile) NumRecords() int {
+	switch {
+	case s.DBF != nil:
+		return len(s.DBF.Records)
+	case s.SHP != nil:
+		return len(s.SHP.Records)
+	case s.SHX != nil:
+		return len(s.SHX.Records)
+	default:
+		return 0
+	}
+}
+
 func (s *Shapefile) Record(i int) (map[string]any, geom.T) {
 	var fields map[string]any
 	if s.DBF != nil {
