@@ -52,7 +52,7 @@ RECORD:
 		case err != nil:
 			return nil, fmt.Errorf("record %d: %w", recordNumber, err)
 		case record.Number != recordNumber:
-			return nil, fmt.Errorf("record %d: invalid record number", recordNumber)
+			return nil, fmt.Errorf("record %d: invalid record number (expected %d)", recordNumber, record.Number)
 		default:
 			records = append(records, record)
 		}
