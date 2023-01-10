@@ -1,7 +1,5 @@
 package shapefile
 
-// FIXME validate XYZ and XYZM code
-// FIXME do more validation, especially against the length of the file
 // FIXME use .shx indexes
 // FIXME factor out ParseSHPRecord
 

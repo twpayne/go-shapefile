@@ -1,7 +1,5 @@
 package shapefile
 
-// FIXME do more validation, especially against the length of the file
-
 import (
 	"archive/zip"
 	"encoding/binary"
