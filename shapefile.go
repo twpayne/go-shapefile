@@ -285,6 +285,12 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 		return nil, errors.New("too many .shx files")
 	}
 
+	if dbf != nil && shp != nil && len(dbf.Records) != len(shp.Records) ||
+		dbf != nil && shx != nil && len(dbf.Records) != len(shx.Records) ||
+		shp != nil && shx != nil && len(shp.Records) != len(shx.Records) {
+		return nil, errors.New("inconsistent number of records")
+	}
+
 	return &Shapefile{
 		DBF: dbf,
 		PRJ: prj,
