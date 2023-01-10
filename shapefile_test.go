@@ -52,6 +52,10 @@ func TestReadFS(t *testing.T) {
 			expectedGeom0:      newGeomFromWKT(t, "MULTILINESTRING ZM ((1 5 18 -1E+39,5 5 20 -1E+39,5 1 22 -1E+39,3 3 0 -1E+39,1 1 0 -1E+39),(3 2 0 -1E+39,2 6 0 -1E+39),(3 2 15 0,2 6 13 3,1 9 14 2))"),
 		},
 		{
+			skipReason: "first record has number 1, not 0",
+			basename:   "multi_polygon",
+		},
+		{
 			skipReason:        "multipatch is not supported",
 			basename:          "multipatch",
 			expectedShapeType: ShapeTypeMultiPatch,
