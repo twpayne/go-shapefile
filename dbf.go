@@ -27,12 +27,12 @@ const (
 
 var (
 	knownFieldTypes = map[byte]struct{}{
-		'C': {},
-		'D': {},
-		'F': {},
-		'L': {},
-		'M': {},
-		'N': {},
+		'C': {}, // Character
+		'D': {}, // Date
+		'F': {}, // Floating point binary numeric
+		'L': {}, // Binary coded decimal numeric
+		'M': {}, // Memo
+		'N': {}, // Numeric
 	}
 
 	knownLogicalValues = map[byte]any{
