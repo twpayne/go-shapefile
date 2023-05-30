@@ -2,7 +2,7 @@ package shapefile
 
 // FIXME support dBase version 7 files if needed, see https://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm
 // FIXME work through https://www.clicketyclick.dk/databases/xbase/format/dbf.html and add any missing features
-// FIXME add unmarshaller that unmarshals a record into a Go struct with `dbf:"..."` tags?s
+// FIXME add unmarshaller that unmarshalls a record into a Go struct with `dbf:"..."` tags?s
 // FIXME validate logical implementation
 // FIXME add support for memos
 
@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/html/charset"
+	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 )
 
@@ -27,12 +29,12 @@ const (
 
 var (
 	knownFieldTypes = map[byte]struct{}{
-		'C': {},
-		'D': {},
-		'F': {},
-		'L': {},
-		'M': {},
-		'N': {},
+		'C': {}, // Character
+		'D': {}, // Date
+		'F': {}, // Floating point binary numeric
+		'L': {}, // Binary coded decimal numeric
+		'M': {}, // Memo
+		'N': {}, // Numeric
 	}
 
 	knownLogicalValues = map[byte]any{
@@ -46,8 +48,6 @@ var (
 		't': true,
 		'y': true,
 	}
-
-	iso8859_1Decoder = charmap.ISO8859_1.NewDecoder()
 )
 
 // A DBFHeader is a DBF header.
@@ -86,6 +86,7 @@ type ReadDBFOptions struct {
 	MaxHeaderSize int
 	MaxRecordSize int
 	MaxRecords    int
+	Charset       string
 }
 
 // A DBFMemo is a DBF memo.
@@ -145,6 +146,16 @@ func ReadDBF(r io.Reader, _ int64, options *ReadDBFOptions) (*DBF, error) {
 		return nil, errors.New("invalid total length of fields")
 	}
 
+	var decoder *encoding.Decoder
+	if options != nil && options.Charset != "" {
+		enc, _ := charset.Lookup(options.Charset)
+		if enc == nil {
+			return nil, fmt.Errorf("unknown charset '%s'", options.Charset)
+		}
+		decoder = enc.NewDecoder()
+	} else {
+		decoder = charmap.ISO8859_1.NewDecoder()
+	}
 	records := make([][]any, 0, header.Records)
 	for i := 0; i < header.Records; i++ {
 		recordData := make([]byte, header.RecordSize)
@@ -158,7 +169,7 @@ func ReadDBF(r io.Reader, _ int64, options *ReadDBFOptions) (*DBF, error) {
 			for _, fieldDescriptor := range fieldDescriptors {
 				fieldData := recordData[offset : offset+fieldDescriptor.Length]
 				offset += fieldDescriptor.Length
-				field, err := fieldDescriptor.ParseRecord(fieldData)
+				field, err := fieldDescriptor.ParseRecord(fieldData, decoder)
 				if err != nil {
 					return nil, fmt.Errorf("field %s: %w", fieldDescriptor.Name, err)
 				}
@@ -267,10 +278,10 @@ func (d *DBF) Record(i int) map[string]any {
 }
 
 // ParseRecord parses a record from data.
-func (d *DBFFieldDescriptor) ParseRecord(data []byte) (any, error) {
+func (d *DBFFieldDescriptor) ParseRecord(data []byte, decoder *encoding.Decoder) (any, error) {
 	switch d.Type {
 	case 'C':
-		return parseCharacter(data)
+		return parseCharacter(data, decoder)
 	case 'D':
 		return parseDate(data)
 	case 'F':
@@ -296,8 +307,11 @@ func TrimTrailingZeros(data []byte) []byte {
 	return nil
 }
 
-func parseCharacter(data []byte) (string, error) {
-	return iso8859_1Decoder.String(string(bytes.TrimSpace(TrimTrailingZeros(data))))
+func parseCharacter(data []byte, decoder *encoding.Decoder) (string, error) {
+	if decoder == nil {
+		return "", fmt.Errorf("decoder is nil")
+	}
+	return decoder.String(string(bytes.TrimSpace(TrimTrailingZeros(data))))
 }
 
 func parseDate(data []byte) (time.Time, error) {

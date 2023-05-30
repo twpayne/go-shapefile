@@ -1,26 +1,22 @@
 package shapefile
 
 import (
-	"archive/zip"
-	"io"
-	"io/fs"
 	"math"
-	"os"
-	"path/filepath"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/encoding/wkt"
 )
 
-func TestReadFS(t *testing.T) {
+func TestReadScanner(t *testing.T) {
 	for _, tc := range []struct {
 		skipReason         string
 		basename           string
 		hasDBF             bool
 		hasPRJ             bool
+		hasCPG             bool
 		hasSHX             bool
 		expectedErr        string
 		expectedShapeType  ShapeType
@@ -28,6 +24,7 @@ func TestReadFS(t *testing.T) {
 		expectedNumRecords int
 		expectedGeom0      geom.T
 		expectedDBFRecord0 []any
+		expectedExport     any
 	}{
 		{
 			basename:           "line",
@@ -130,6 +127,17 @@ func TestReadFS(t *testing.T) {
 			expectedNumRecords: 10,
 			expectedGeom0:      newGeomFromWKT(t, "POLYGON ((479819.84375 4765180.5,479690.1875 4765259.5,479647.0 4765369.5,479730.375 4765400.5,480039.03125 4765539.5,480035.34375 4765558.5,480159.78125 4765610.5,480202.28125 4765482.0,480365.0 4765015.5,480389.6875 4764950.0,480133.96875 4764856.5,480080.28125 4764979.5,480082.96875 4765049.5,480088.8125 4765139.5,480059.90625 4765239.5,480019.71875 4765319.5,479980.21875 4765409.5,479909.875 4765370.0,479859.875 4765270.0,479819.84375 4765180.5))"),
 			expectedDBFRecord0: []any{215229.266, 168, "35043411"},
+			expectedExport: struct {
+				Geometry geom.T  `geom:"geometry"`
+				Area     float32 `geom:"area"`
+				EAS      int     `geom:"eas_id"`
+				PRFEDEA  string  `geom:"prfedea"`
+			}{
+				Geometry: newGeomFromWKT(t, "POLYGON ((479819.84375 4765180.5,479690.1875 4765259.5,479647.0 4765369.5,479730.375 4765400.5,480039.03125 4765539.5,480035.34375 4765558.5,480159.78125 4765610.5,480202.28125 4765482.0,480365.0 4765015.5,480389.6875 4764950.0,480133.96875 4764856.5,480080.28125 4764979.5,480082.96875 4765049.5,480088.8125 4765139.5,480059.90625 4765239.5,480019.71875 4765319.5,479980.21875 4765409.5,479909.875 4765370.0,479859.875 4765270.0,479819.84375 4765180.5))"),
+				Area:     215229.266,
+				EAS:      168,
+				PRFEDEA:  "35043411",
+			},
 		},
 	} {
 		t.Run(tc.basename, func(t *testing.T) {
@@ -138,75 +146,47 @@ func TestReadFS(t *testing.T) {
 			}
 
 			t.Run("Read", func(t *testing.T) {
-				shapefile, err := Read(filepath.Join("testdata", tc.basename), nil)
+				scanner, err := NewScannerFromBasename(path.Join("testdata", tc.basename), nil)
+				require.NoError(t, err)
+				require.NotNil(t, scanner)
+				shapefile, err := ReadScanner(scanner)
 				require.NoError(t, err)
 				require.NotNil(t, shapefile)
 
-				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
-				assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
+				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.SHxHeader.ShapeType)
+				assert.Equal(t, tc.expectedBounds, shapefile.SHP.SHxHeader.Bounds)
 				assert.Equal(t, tc.expectedNumRecords, shapefile.NumRecords())
 				assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
 
 				if tc.hasDBF {
-					assert.Len(t, shapefile.DBF.Records, tc.expectedNumRecords)
+					assert.Equal(t, shapefile.NumRecords(), tc.expectedNumRecords)
 					assert.Equal(t, tc.expectedDBFRecord0, shapefile.DBF.Records[0])
 				} else {
 					assert.Nil(t, shapefile.DBF)
 				}
 
 				if tc.hasPRJ {
-					assert.NotNil(t, shapefile.PRJ)
+					assert.NotNil(t, shapefile.PRJ.Projection)
 				} else {
 					assert.Nil(t, shapefile.PRJ)
 				}
-
-				if tc.hasSHX {
-					assert.Equal(t, tc.expectedShapeType, shapefile.SHX.ShapeType)
-					assert.Equal(t, tc.expectedBounds, shapefile.SHX.Bounds)
-					assert.Len(t, shapefile.SHX.Records, tc.expectedNumRecords)
+				if tc.hasCPG {
+					assert.NotNil(t, shapefile.CPG.Charset)
 				} else {
-					assert.Nil(t, shapefile.SHX)
-				}
-			})
-
-			t.Run("ReadFS", func(t *testing.T) {
-				shapefile, err := ReadFS(os.DirFS("testdata"), tc.basename, nil)
-				if tc.expectedErr != "" {
-					require.Error(t, err, tc.expectedErr)
-				}
-				require.NoError(t, err)
-
-				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
-				assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
-				assert.Equal(t, tc.expectedNumRecords, shapefile.NumRecords())
-				assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
-
-				if tc.hasDBF {
-					assert.Len(t, shapefile.DBF.Records, tc.expectedNumRecords)
-					assert.Equal(t, tc.expectedDBFRecord0, shapefile.DBF.Records[0])
-				} else {
-					assert.Nil(t, shapefile.DBF)
-				}
-
-				if tc.hasPRJ {
-					assert.NotNil(t, shapefile.PRJ)
-				} else {
-					assert.Nil(t, shapefile.PRJ)
+					assert.Nil(t, shapefile.CPG)
 				}
 
 				if tc.hasSHX {
-					assert.Equal(t, tc.expectedShapeType, shapefile.SHX.ShapeType)
-					assert.Equal(t, tc.expectedBounds, shapefile.SHX.Bounds)
-					assert.Len(t, shapefile.SHX.Records, tc.expectedNumRecords)
-				} else {
-					assert.Nil(t, shapefile.SHX)
+					assert.Equal(t, tc.expectedShapeType, shapefile.SHP.SHxHeader.ShapeType)
+					assert.Equal(t, tc.expectedBounds, shapefile.SHP.SHxHeader.Bounds)
+					assert.Equal(t, shapefile.NumRecords(), tc.expectedNumRecords)
 				}
 			})
 		})
 	}
 }
 
-func TestReadFSAndZipFile(t *testing.T) {
+func TestReadScannerFSAndZipFile(t *testing.T) {
 	for _, tc := range []struct {
 		filename                 string
 		basename                 string
@@ -215,6 +195,7 @@ func TestReadFSAndZipFile(t *testing.T) {
 		expectedRecordsLen       int
 		expectedDBFRecord0Fields map[string]any
 		expectedSHPRecord0       *SHPRecord
+		expectedExport           any
 	}{
 		{
 			filename:          "testdata/110m-admin-0-countries.zip",
@@ -298,6 +279,49 @@ func TestReadFSAndZipFile(t *testing.T) {
 				ShapeType:     ShapeTypePoint,
 				Geom:          newGeomFromWKT(t, "POINT (15.744476635247011 47.56136608020768)"),
 			},
+			expectedExport: struct {
+				Geometry   geom.T  `geom:"geometry"`
+				Art        string  `geom:"art"`
+				Befeuert   string  `geom:"befeuert"`
+				Betreiber  string  `geom:"betreiber"`
+				GZ         string  `geom:"gz"`
+				HoeheFp    float32 `geom:"hoehe_fp"`
+				HoeheObj   float32 `geom:"hoehe_obj"`
+				LfhID      int     `geom:"lfh_id"`
+				Name       string  `geom:"name"`
+				ObjectID   int     `geom:"objectid"`
+				PointX     float64 `geom:"point_x"`
+				PointY     float64 `geom:"point_y"`
+				Protnr     int     `geom:"protnr"`
+				Tagkennzg  string  `geom:"tagkennzg"`
+				WGSBreite  string  `geom:"wgs_breite"`
+				WGSLaenge  string  `geom:"wgs_laenge"`
+				ChangeDate string  `geom:"change_date"`
+				ChangeUser string  `geom:"change_user"`
+				CreateDate string  `geom:"create_date"`
+				CreateUser string  `geom:"create_user"`
+			}{
+				Geometry:   newGeomFromWKT(t, "POINT (15.744476635247011 47.56136608020768)"),
+				Art:        "Windkraftanlage",
+				Befeuert:   "N",
+				Betreiber:  "Viktor Kaplan Mürz GmbH",
+				GZ:         "FA18E-88-1082/2002-18",
+				HoeheFp:    1580.,
+				HoeheObj:   100.,
+				LfhID:      2,
+				Name:       "Windkraftanlage Windpark Moschkogel WKA 04",
+				ObjectID:   191,
+				PointX:     15.74447664,
+				PointY:     47.56136608,
+				Protnr:     17829,
+				Tagkennzg:  "N",
+				WGSBreite:  "47 33 41,0",
+				WGSLaenge:  "15 44 40,0",
+				ChangeDate: "20210222130000",
+				ChangeUser: "",
+				CreateDate: "20210222130000",
+				CreateUser: "",
+			},
 		},
 		{
 			filename:          "testdata/SZ.exe",
@@ -334,10 +358,10 @@ func TestReadFSAndZipFile(t *testing.T) {
 		t.Run(tc.filename, func(t *testing.T) {
 			testShapefile := func(t *testing.T, shapefile *Shapefile) {
 				t.Helper()
-				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
-				assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
+				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.SHxHeader.ShapeType)
+				assert.Equal(t, tc.expectedBounds, shapefile.SHP.SHxHeader.Bounds)
 
-				assert.Len(t, shapefile.DBF.Records, tc.expectedRecordsLen)
+				assert.Equal(t, shapefile.NumRecords(), tc.expectedRecordsLen)
 				if tc.expectedDBFRecord0Fields != nil {
 					fields, geom := shapefile.Record(0)
 					assert.Equal(t, tc.expectedDBFRecord0Fields, fields)
@@ -346,7 +370,7 @@ func TestReadFSAndZipFile(t *testing.T) {
 					}
 				}
 
-				assert.Len(t, shapefile.SHP.Records, tc.expectedRecordsLen)
+				assert.Equal(t, shapefile.NumRecords(), tc.expectedRecordsLen)
 				if tc.expectedSHPRecord0 != nil {
 					shpRecord0 := shapefile.SHP.Records[0]
 					assert.Equal(t, tc.expectedSHPRecord0.Number, shpRecord0.Number)
@@ -357,88 +381,18 @@ func TestReadFSAndZipFile(t *testing.T) {
 					}
 				}
 
-				assert.Len(t, shapefile.SHX.Records, tc.expectedRecordsLen)
+				assert.Equal(t, shapefile.NumRecords(), tc.expectedRecordsLen)
 			}
 
-			t.Run("ReadFS", func(t *testing.T) {
-				file, err := os.Open(tc.filename)
-				require.NoError(t, err)
-				defer file.Close()
-
-				fileInfo, err := file.Stat()
-				require.NoError(t, err)
-
-				zipReader, err := zip.NewReader(file, fileInfo.Size())
-				require.NoError(t, err)
-
-				shapefile, err := ReadFS(zipReader, tc.basename, nil)
-				require.NoError(t, err)
-
-				testShapefile(t, shapefile)
-			})
-
 			t.Run("ReadZipFile", func(t *testing.T) {
-				shapefile, err := ReadZipFile(tc.filename, nil)
+				scanner, err := NewScannerFromZipFile(tc.filename, nil)
 				require.NoError(t, err)
+				assert.NotNil(t, scanner)
+				shapefile, err := ReadScanner(scanner)
+				require.NoError(t, err)
+				assert.NotNil(t, scanner)
 				testShapefile(t, shapefile)
 			})
 		})
 	}
-}
-
-func addFuzzDataFromFS(f *testing.F, fsys fs.FS, root, ext string) error {
-	f.Helper()
-	return fs.WalkDir(fsys, root, func(path string, _ fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		switch filepath.Ext(path) {
-		case ext:
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			f.Add(data)
-		case ".exe", ".zip":
-			file, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-
-			fileInfo, err := file.Stat()
-			if err != nil {
-				return err
-			}
-
-			zipReader, err := zip.NewReader(file, fileInfo.Size())
-			if err != nil {
-				return err
-			}
-
-			for _, zipFile := range zipReader.File {
-				if filepath.Ext(zipFile.Name) != ext {
-					continue
-				}
-				readCloser, err := zipFile.Open()
-				if err != nil {
-					return err
-				}
-				data, err := io.ReadAll(readCloser)
-				readCloser.Close()
-				if err != nil {
-					return err
-				}
-				f.Add(data)
-			}
-		}
-		return nil
-	})
-}
-
-func newGeomFromWKT(t *testing.T, wktStr string) geom.T {
-	t.Helper()
-	g, err := wkt.Unmarshal(wktStr)
-	require.NoError(t, err)
-	return g
 }
