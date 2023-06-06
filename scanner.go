@@ -11,9 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
-	"path/filepath"
+	"path"
 	"reflect"
 	"strings"
 
@@ -205,7 +204,7 @@ func NewScannerFromBasename(basename string, options *ReadShapefileOptions) (*Sc
 
 	dbfFile, dbfSize, err := openWithSize(basename + ".dbf")
 	switch {
-	case errors.Is(err, fs.ErrNotExist):
+	case errors.Is(err, os.ErrNotExist):
 		// Do nothing.
 	case err != nil:
 		return nil, fmt.Errorf("%s.dbf: %w", basename, err)
@@ -216,7 +215,7 @@ func NewScannerFromBasename(basename string, options *ReadShapefileOptions) (*Sc
 
 	prjFile, prjSize, err := openWithSize(basename + ".prj")
 	switch {
-	case errors.Is(err, fs.ErrNotExist):
+	case errors.Is(err, os.ErrNotExist):
 		// Do nothing.
 	case err != nil:
 		return nil, fmt.Errorf("%s.prj: %w", basename, err)
@@ -227,7 +226,7 @@ func NewScannerFromBasename(basename string, options *ReadShapefileOptions) (*Sc
 
 	shxFile, shxSize, err := openWithSize(basename + ".shx")
 	switch {
-	case errors.Is(err, fs.ErrNotExist):
+	case errors.Is(err, os.ErrNotExist):
 		// Do nothing.
 	case err != nil:
 		return nil, fmt.Errorf("%s.shx: %w", basename, err)
@@ -238,7 +237,7 @@ func NewScannerFromBasename(basename string, options *ReadShapefileOptions) (*Sc
 
 	shpFile, shpSize, err := openWithSize(basename + ".shp")
 	switch {
-	case errors.Is(err, fs.ErrNotExist):
+	case errors.Is(err, os.ErrNotExist):
 		// Do nothing.
 	case err != nil:
 		return nil, fmt.Errorf("%s.shp: %w", basename, err)
@@ -286,7 +285,7 @@ func NewScannerFromZipReader(zipReader *zip.Reader, options *ReadShapefileOption
 	var shxFiles []*zip.File
 	var shpFiles []*zip.File
 	for _, zipFile := range zipReader.File {
-		switch strings.ToLower(filepath.Ext(zipFile.Name)) {
+		switch strings.ToLower(path.Ext(zipFile.Name)) {
 		case ".dbf":
 			dbfFiles = append(dbfFiles, zipFile)
 		case ".prj":
