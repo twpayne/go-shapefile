@@ -7,16 +7,25 @@ package shapefile
 
 import (
 	"archive/zip"
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
+	"github.com/ettle/strcase"
 	"github.com/twpayne/go-geom"
 )
+
+// bufioReadCloser ...
+type bufioReadCloser = struct {
+	*bufio.Reader
+	io.Closer
+}
 
 type ScanShapefile struct {
 	SHxHeader        *SHxHeader
@@ -25,32 +34,100 @@ type ScanShapefile struct {
 	Projection       *string
 	NumRecords       int
 	Records          []*ScanRecord
+
+	fieldDescOrder map[int]string
 }
 
+func (s ScanShapefile) Record(i int) (map[string]any, geom.T) {
+	if s.Records[i] == nil {
+		return nil, nil
+	}
+	return s.Records[i].Properties(s.fieldDescOrder), s.Records[i].Geom()
+}
+
+// ScanExporter ...
+type ScanExporter struct {
+	FieldStruct map[int]string
+	Type        reflect.Type
+}
+
+// NewExporter ...
+func NewExporter(t reflect.Type, tag string, fieldDescriptors []*DBFFieldDescriptor) (*ScanExporter, error) {
+	if t == nil || t.Kind() != reflect.Struct {
+		return nil, errors.New("type t is nil or is not a struct")
+	}
+	structTags := make(map[string]string, t.NumField())
+	for j := 0; j < t.NumField(); j++ {
+		fieldType := t.Field(j)
+		tagName := strings.Split(fieldType.Tag.Get(tag), ",")[0]
+		structTags[tagName] = fieldType.Name
+	}
+	fieldStruct := make(map[int]string, len(fieldDescriptors))
+	fieldStruct[-1] = structTags["geometry"]
+	for i, fieldDescriptor := range fieldDescriptors {
+		if name, ok := structTags[strcase.ToSnake(fieldDescriptor.Name)]; ok {
+			fieldStruct[i] = name
+		}
+	}
+	return &ScanExporter{
+		FieldStruct: fieldStruct,
+		Type:        t,
+	}, nil
+}
+
+// ScanRecord ...
 type ScanRecord struct {
 	SPH *SHPRecord
 	SHX *SHXRecord
 	DBF *DBFRecord
 }
 
-// Record returns s's ith record's fields and geometry.
-func (s *ScanShapefile) Record(i int) (map[string]any, geom.T) {
-	if s.Records[i] == nil {
-		return nil, nil
+func (s ScanRecord) Properties(order map[int]string) map[string]any {
+	if s.DBF == nil {
+		return nil
 	}
-	fields := make(map[string]any, len(s.FieldDescriptors))
-	if record := s.Records[i].DBF; record != nil {
-		for j, fieldDescriptor := range s.FieldDescriptors {
-			fields[fieldDescriptor.Name] = (*record)[j]
-		}
+	pMap := make(map[string]any)
+	props := *s.DBF
+	for i := 0; i < len(props); i++ {
+		pMap[order[i]] = props[i]
 	}
-	var g geom.T
-	if s.Records[i].SPH != nil {
-		g = s.Records[i].SPH.Geom
-	}
-	return fields, g
+	return pMap
 }
 
+func (s ScanRecord) Geom() geom.T {
+	if s.SPH == nil {
+		return nil
+	}
+	return s.SPH.Geom
+}
+
+func (s ScanRecord) Export(exporter *ScanExporter) any {
+	if exporter == nil {
+		return nil
+	}
+	values := reflect.New(exporter.Type)
+	if s.DBF != nil {
+		props := *s.DBF
+		for i := 0; i < len(props); i++ {
+			val := values.Elem().FieldByName(exporter.FieldStruct[i])
+			target := reflect.ValueOf(props[i])
+			if val.IsValid() && target.CanConvert(val.Type()) {
+				val.Set(target.Convert(val.Type()))
+			}
+		}
+	}
+	if s.SPH != nil {
+		val := values.Elem().FieldByName(exporter.FieldStruct[-1])
+		target := reflect.ValueOf(s.SPH.Geom)
+		if val.IsValid() && target.CanConvert(val.Type()) {
+			val.Set(target.Convert(val.Type()))
+		}
+	}
+
+	return values.Elem().Interface()
+}
+
+// Scanner ...
 type Scanner struct {
 	SHP         *ScannerSHP
 	DBF         *ScannerDBF
@@ -107,6 +184,10 @@ func ReadScanner(scanner *Scanner) (*ScanShapefile, error) {
 	if scanner.DBF != nil {
 		sf.DBFHeader = scanner.DBF.header
 		sf.FieldDescriptors = scanner.DBF.fieldDescriptors
+		sf.fieldDescOrder = make(map[int]string, len(sf.FieldDescriptors))
+		for i, field := range sf.FieldDescriptors {
+			sf.fieldDescOrder[i] = field.Name
+		}
 	}
 	if scanner.PRJ != nil {
 		sf.Projection = &scanner.PRJ.Projection
@@ -355,6 +436,38 @@ func (s *Scanner) Scan() (*ScanRecord, error) {
 	return &scanRecord, nil
 }
 
+// Discard ...
+func (s *Scanner) Discard(n int) (int, error) {
+	var nByte int
+	if s.DBF != nil {
+		nb, err := s.DBF.reader.Discard(n * s.DBF.header.RecordSize)
+		if err != nil {
+			return nb, err
+		}
+		nByte = nb
+	}
+	if s.SHX != nil {
+		nb, err := s.SHX.reader.Discard(n * 8)
+		if err != nil {
+			return nb, err
+		}
+		nByte = n
+		if s.SHP != nil {
+			data, err := s.SHX.reader.Peek(8)
+			if err != nil {
+				return 0, err
+			}
+			record := ParseSHXRecord(data)
+			nb, err := s.DBF.reader.Discard(record.Offset)
+			if err != nil {
+				return nb, err
+			}
+			nByte = nb
+		}
+	}
+	return nByte, nil
+}
+
 func (s *Scanner) Close() error {
 	var err error
 	if s.DBF != nil {
@@ -371,7 +484,7 @@ func (s *Scanner) Close() error {
 
 // SHP
 type ScannerSHP struct {
-	reader      io.ReadCloser
+	reader      bufioReadCloser
 	options     *ReadSHPOptions
 	header      *SHxHeader
 	scanRecords int
@@ -384,7 +497,7 @@ func NewScannerSHP(reader io.ReadCloser, size int64, options *ReadSHPOptions) (*
 		return nil, err
 	}
 	return &ScannerSHP{
-		reader:  reader,
+		reader:  bufioReadCloser{bufio.NewReader(reader), reader},
 		header:  header,
 		options: options,
 	}, nil
@@ -413,13 +526,9 @@ func (s *ScannerSHP) Scan() (*SHPRecord, error) {
 	}
 }
 
-func (s *ScannerSHP) Close() error {
-	return s.reader.Close()
-}
-
 // SHX
 type ScannerSHX struct {
-	reader      io.ReadCloser
+	reader      bufioReadCloser
 	header      *SHxHeader
 	scanRecords int
 	err         error
@@ -431,7 +540,7 @@ func NewScannerSHX(reader io.ReadCloser, size int64) (*ScannerSHX, error) {
 		return nil, err
 	}
 	return &ScannerSHX{
-		reader: reader,
+		reader: bufioReadCloser{bufio.NewReader(reader), reader},
 		header: header,
 	}, nil
 }
@@ -450,15 +559,11 @@ func (s *ScannerSHX) Scan() (*SHXRecord, error) {
 	return &record, nil
 }
 
-func (s *ScannerSHX) Close() error {
-	return s.reader.Close()
-}
-
 // DBF
 type DBFRecord = []any
 
 type ScannerDBF struct {
-	reader           io.ReadCloser
+	reader           bufioReadCloser
 	options          *ReadDBFOptions
 	header           *DBFHeader
 	fieldDescriptors []*DBFFieldDescriptor
@@ -518,7 +623,7 @@ func NewScannerDBF(reader io.ReadCloser, options *ReadDBFOptions) (*ScannerDBF, 
 	}
 
 	return &ScannerDBF{
-		reader:           reader,
+		reader:           bufioReadCloser{bufio.NewReader(reader), reader},
 		options:          options,
 		header:           header,
 		fieldDescriptors: fieldDescriptors,
@@ -559,7 +664,4 @@ func (s *ScannerDBF) Scan() (DBFRecord, error) {
 		s.err = fmt.Errorf("%d: invalid record flag", recordData[0])
 		return nil, s.err
 	}
-}
-func (s *ScannerDBF) Close() error {
-	return s.reader.Close()
 }

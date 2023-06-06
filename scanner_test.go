@@ -3,6 +3,7 @@ package shapefile
 import (
 	"math"
 	"path"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,7 @@ func TestReadScanner(t *testing.T) {
 		expectedNumRecords int
 		expectedGeom0      geom.T
 		expectedDBFRecord0 []any
+		expectedExport     any
 	}{
 		{
 			basename:           "line",
@@ -125,6 +127,17 @@ func TestReadScanner(t *testing.T) {
 			expectedNumRecords: 10,
 			expectedGeom0:      newGeomFromWKT(t, "POLYGON ((479819.84375 4765180.5,479690.1875 4765259.5,479647.0 4765369.5,479730.375 4765400.5,480039.03125 4765539.5,480035.34375 4765558.5,480159.78125 4765610.5,480202.28125 4765482.0,480365.0 4765015.5,480389.6875 4764950.0,480133.96875 4764856.5,480080.28125 4764979.5,480082.96875 4765049.5,480088.8125 4765139.5,480059.90625 4765239.5,480019.71875 4765319.5,479980.21875 4765409.5,479909.875 4765370.0,479859.875 4765270.0,479819.84375 4765180.5))"),
 			expectedDBFRecord0: []any{215229.266, 168, "35043411"},
+			expectedExport: struct {
+				Geometry geom.T  `geom:"geometry"`
+				Area     float32 `geom:"area"`
+				EAS      int     `geom:"eas_id"`
+				PRFEDEA  string  `geom:"prfedea"`
+			}{
+				Geometry: newGeomFromWKT(t, "POLYGON ((479819.84375 4765180.5,479690.1875 4765259.5,479647.0 4765369.5,479730.375 4765400.5,480039.03125 4765539.5,480035.34375 4765558.5,480159.78125 4765610.5,480202.28125 4765482.0,480365.0 4765015.5,480389.6875 4764950.0,480133.96875 4764856.5,480080.28125 4764979.5,480082.96875 4765049.5,480088.8125 4765139.5,480059.90625 4765239.5,480019.71875 4765319.5,479980.21875 4765409.5,479909.875 4765370.0,479859.875 4765270.0,479819.84375 4765180.5))"),
+				Area:     215229.266,
+				EAS:      168,
+				PRFEDEA:  "35043411",
+			},
 		},
 	} {
 		t.Run(tc.basename, func(t *testing.T) {
@@ -137,6 +150,11 @@ func TestReadScanner(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, shapefile)
 
+				exporter, err := NewExporter(reflect.TypeOf(tc.expectedExport), "geom", shapefile.FieldDescriptors)
+				if tc.expectedExport != nil {
+					require.NoError(t, err)
+					require.NotNil(t, exporter)
+				}
 				assert.Equal(t, tc.expectedShapeType, shapefile.SHxHeader.ShapeType)
 				assert.Equal(t, tc.expectedBounds, shapefile.SHxHeader.Bounds)
 				assert.Equal(t, tc.expectedNumRecords, shapefile.NumRecords)
@@ -174,6 +192,7 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 		expectedRecordsLen       int
 		expectedDBFRecord0Fields map[string]any
 		expectedSHPRecord0       *SHPRecord
+		expectedExport           any
 	}{
 		{
 			filename:          "testdata/110m-admin-0-countries.zip",
@@ -257,6 +276,49 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 				ShapeType:     ShapeTypePoint,
 				Geom:          newGeomFromWKT(t, "POINT (15.744476635247011 47.56136608020768)"),
 			},
+			expectedExport: struct {
+				Geometry   geom.T  `geom:"geometry"`
+				Art        string  `geom:"art"`
+				Befeuert   string  `geom:"befeuert"`
+				Betreiber  string  `geom:"betreiber"`
+				GZ         string  `geom:"gz"`
+				HoeheFp    float32 `geom:"hoehe_fp"`
+				HoeheObj   float32 `geom:"hoehe_obj"`
+				LFH_ID     int     `geom:"lfh_id"`
+				Name       string  `geom:"name"`
+				ObjectID   int     `geom:"objectid"`
+				PointX     float64 `geom:"point_x"`
+				PointY     float64 `geom:"point_y"`
+				Protnr     int     `geom:"protnr"`
+				Tagkennzg  string  `geom:"tagkennzg"`
+				WGSBreite  string  `geom:"wgs_breite"`
+				WGSLaenge  string  `geom:"wgs_laenge"`
+				ChangeDate string  `geom:"change_date"`
+				ChangeUser string  `geom:"change_user"`
+				CreateDate string  `geom:"create_date"`
+				CreateUser string  `geom:"create_user"`
+			}{
+				Geometry:   newGeomFromWKT(t, "POINT (15.744476635247011 47.56136608020768)"),
+				Art:        "Windkraftanlage",
+				Befeuert:   "N",
+				Betreiber:  "Viktor Kaplan Mürz GmbH",
+				GZ:         "FA18E-88-1082/2002-18",
+				HoeheFp:    1580.,
+				HoeheObj:   100.,
+				LFH_ID:     2,
+				Name:       "Windkraftanlage Windpark Moschkogel WKA 04",
+				ObjectID:   191,
+				PointX:     15.74447664,
+				PointY:     47.56136608,
+				Protnr:     17829,
+				Tagkennzg:  "N",
+				WGSBreite:  "47 33 41,0",
+				WGSLaenge:  "15 44 40,0",
+				ChangeDate: "20210222130000",
+				ChangeUser: "",
+				CreateDate: "20210222130000",
+				CreateUser: "",
+			},
 		},
 		{
 			filename:          "testdata/SZ.exe",
@@ -295,6 +357,13 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 				t.Helper()
 				assert.Equal(t, tc.expectedShapeType, shapefile.SHxHeader.ShapeType)
 				assert.Equal(t, tc.expectedBounds, shapefile.SHxHeader.Bounds)
+
+				exporter, err := NewExporter(reflect.TypeOf(tc.expectedExport), "geom", shapefile.FieldDescriptors)
+				if tc.expectedExport != nil {
+					require.NoError(t, err)
+					require.NotNil(t, exporter)
+					assert.Equal(t, tc.expectedExport, shapefile.Records[0].Export(exporter))
+				}
 
 				assert.Equal(t, shapefile.NumRecords, tc.expectedRecordsLen)
 				if tc.expectedDBFRecord0Fields != nil {
