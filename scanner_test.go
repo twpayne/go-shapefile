@@ -21,7 +21,7 @@ func TestReadScanner(t *testing.T) {
 		expectedErr        string
 		expectedShapeType  ShapeType
 		expectedBounds     *geom.Bounds
-		expectedNumRecords int
+		expectedNumRecords int64
 		expectedGeom0      geom.T
 		expectedDBFRecord0 []any
 		expectedExport     any
@@ -189,7 +189,7 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 		basename                 string
 		expectedShapeType        ShapeType
 		expectedBounds           *geom.Bounds
-		expectedRecordsLen       int
+		expectedRecordsLen       int64
 		expectedDBFRecord0Fields map[string]any
 		expectedSHPRecord0       *SHPRecord
 		expectedExport           any

@@ -18,6 +18,11 @@ import (
 
 	"github.com/ettle/strcase"
 	"github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkt"
+	"golang.org/x/net/html/charset"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
 )
 
 // bufioReadCloser ...
@@ -31,7 +36,7 @@ type ScanShapefile struct {
 	DBFHeader        *DBFHeader
 	FieldDescriptors []*DBFFieldDescriptor
 	Projection       *string
-	NumRecords       int
+	NumRecords       int64
 	Records          []*ScanRecord
 
 	fieldDescOrder map[int]string
@@ -110,16 +115,42 @@ func (s ScanRecord) Export(exporter *ScanExporter) any {
 		for i := 0; i < len(props); i++ {
 			val := values.Elem().FieldByName(exporter.FieldStruct[i])
 			target := reflect.ValueOf(props[i])
-			if val.IsValid() && target.CanConvert(val.Type()) {
-				val.Set(target.Convert(val.Type()))
+			if val.IsValid() && target.IsValid() && target.CanConvert(val.Type()) {
+				if val.Type().Kind() == reflect.Pointer {
+					val.Set(target.Convert(val.Type()).Addr())
+				} else {
+					val.Set(target.Convert(val.Type()))
+				}
 			}
 		}
 	}
 	if s.SPH != nil {
 		val := values.Elem().FieldByName(exporter.FieldStruct[-1])
-		target := reflect.ValueOf(s.SPH.Geom)
-		if val.IsValid() && target.CanConvert(val.Type()) {
-			val.Set(target.Convert(val.Type()))
+		var target reflect.Value
+		if val.IsValid() {
+			valTp := val.Type()
+			if val.Type().Kind() == reflect.Pointer {
+				valTp = val.Elem().Type()
+			}
+			switch valTp {
+			case reflect.TypeOf((*geom.T)(nil)).Elem():
+				target = reflect.ValueOf(s.SPH.Geom)
+			case reflect.TypeOf((*geojson.Geometry)(nil)).Elem():
+				if gg, err := geojson.Encode(s.SPH.Geom); err == nil {
+					target = reflect.ValueOf(gg)
+				}
+			case reflect.TypeOf((*string)(nil)).Elem():
+				if str, err := wkt.NewEncoder().Encode(s.SPH.Geom); err == nil {
+					target = reflect.ValueOf(str)
+				}
+			}
+			if target.IsValid() && target.CanConvert(val.Type()) {
+				if val.Type().Kind() == reflect.Pointer {
+					val.Set(target.Convert(val.Type()).Addr())
+				} else {
+					val.Set(target.Convert(val.Type()))
+				}
+			}
 		}
 	}
 
@@ -128,12 +159,14 @@ func (s ScanRecord) Export(exporter *ScanExporter) any {
 
 // Scanner ...
 type Scanner struct {
-	SHP         *ScannerSHP
-	DBF         *ScannerDBF
-	SHX         *ScannerSHX
-	PRJ         *PRJ
-	scanRecords int
-	err         error
+	SHP              *ScannerSHP
+	DBF              *ScannerDBF
+	SHX              *ScannerSHX
+	PRJ              *PRJ
+	CPG              *CPG
+	scanRecords      int64
+	estimatedRecords int64
+	err              error
 }
 
 func ReadScannerBasename(basename string, options *ReadShapefileOptions) (*ScanShapefile, error) {
@@ -209,8 +242,8 @@ func NewScannerFromBasename(basename string, options *ReadShapefileOptions) (*Sc
 	case err != nil:
 		return nil, fmt.Errorf("%s.dbf: %w", basename, err)
 	default:
-		readers["dbf"] = dbfFile
-		sizes["dbf"] = dbfSize
+		readers[".dbf"] = dbfFile
+		sizes[".dbf"] = dbfSize
 	}
 
 	prjFile, prjSize, err := openWithSize(basename + ".prj")
@@ -220,8 +253,19 @@ func NewScannerFromBasename(basename string, options *ReadShapefileOptions) (*Sc
 	case err != nil:
 		return nil, fmt.Errorf("%s.prj: %w", basename, err)
 	default:
-		readers["prj"] = prjFile
-		sizes["prj"] = prjSize
+		readers[".prj"] = prjFile
+		sizes[".prj"] = prjSize
+	}
+
+	cpgFile, cpgSize, err := openWithSize(basename + ".cpg")
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		// Do nothing.
+	case err != nil:
+		return nil, fmt.Errorf("%s.cpg: %w", basename, err)
+	default:
+		readers[".cpg"] = cpgFile
+		sizes[".cpg"] = cpgSize
 	}
 
 	shxFile, shxSize, err := openWithSize(basename + ".shx")
@@ -231,8 +275,8 @@ func NewScannerFromBasename(basename string, options *ReadShapefileOptions) (*Sc
 	case err != nil:
 		return nil, fmt.Errorf("%s.shx: %w", basename, err)
 	default:
-		readers["shx"] = shxFile
-		sizes["shx"] = shxSize
+		readers[".shx"] = shxFile
+		sizes[".shx"] = shxSize
 	}
 
 	shpFile, shpSize, err := openWithSize(basename + ".shp")
@@ -242,8 +286,8 @@ func NewScannerFromBasename(basename string, options *ReadShapefileOptions) (*Sc
 	case err != nil:
 		return nil, fmt.Errorf("%s.shp: %w", basename, err)
 	default:
-		readers["shp"] = shpFile
-		sizes["shp"] = shpSize
+		readers[".shp"] = shpFile
+		sizes[".shp"] = shpSize
 	}
 
 	scanner, err := NewScanner(readers, sizes, options)
@@ -282,6 +326,7 @@ func NewScannerFromZipFile(name string, options *ReadShapefileOptions) (*Scanner
 func NewScannerFromZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Scanner, error) {
 	var dbfFiles []*zip.File
 	var prjFiles []*zip.File
+	var cpgFiles []*zip.File
 	var shxFiles []*zip.File
 	var shpFiles []*zip.File
 	for _, zipFile := range zipReader.File {
@@ -290,6 +335,8 @@ func NewScannerFromZipReader(zipReader *zip.Reader, options *ReadShapefileOption
 			dbfFiles = append(dbfFiles, zipFile)
 		case ".prj":
 			prjFiles = append(prjFiles, zipFile)
+		case ".cpg":
+			shxFiles = append(cpgFiles, zipFile)
 		case ".shp":
 			shpFiles = append(shpFiles, zipFile)
 		case ".shx":
@@ -308,8 +355,8 @@ func NewScannerFromZipReader(zipReader *zip.Reader, options *ReadShapefileOption
 		if err != nil {
 			return nil, err
 		}
-		readers["dbf"] = readCloser
-		sizes["dbf"] = int64(dbfFiles[0].UncompressedSize64)
+		readers[".dbf"] = readCloser
+		sizes[".dbf"] = int64(dbfFiles[0].UncompressedSize64)
 	default:
 		return nil, errors.New("too many .dbf files")
 	}
@@ -318,14 +365,28 @@ func NewScannerFromZipReader(zipReader *zip.Reader, options *ReadShapefileOption
 	case 0:
 		// Do nothing.
 	case 1:
-		readCloser, err := dbfFiles[0].Open()
+		readCloser, err := prjFiles[0].Open()
 		if err != nil {
 			return nil, err
 		}
-		readers["prj"] = readCloser
-		sizes["prj"] = int64(prjFiles[0].UncompressedSize64)
+		readers[".prj"] = readCloser
+		sizes[".prj"] = int64(prjFiles[0].UncompressedSize64)
 	default:
 		return nil, errors.New("too many .prj files")
+	}
+
+	switch len(cpgFiles) {
+	case 0:
+		// Do nothing.
+	case 1:
+		readCloser, err := cpgFiles[0].Open()
+		if err != nil {
+			return nil, err
+		}
+		readers[".cpg"] = readCloser
+		sizes[".cpg"] = int64(cpgFiles[0].UncompressedSize64)
+	default:
+		return nil, errors.New("too many .cpg files")
 	}
 
 	switch len(shpFiles) {
@@ -336,8 +397,8 @@ func NewScannerFromZipReader(zipReader *zip.Reader, options *ReadShapefileOption
 		if err != nil {
 			return nil, err
 		}
-		readers["shp"] = readCloser
-		sizes["shp"] = int64(shpFiles[0].UncompressedSize64)
+		readers[".shp"] = readCloser
+		sizes[".shp"] = int64(shpFiles[0].UncompressedSize64)
 	default:
 		return nil, errors.New("too many .shp files")
 	}
@@ -350,8 +411,8 @@ func NewScannerFromZipReader(zipReader *zip.Reader, options *ReadShapefileOption
 		if err != nil {
 			return nil, err
 		}
-		readers["shx"] = readCloser
-		sizes["shx"] = int64(shxFiles[0].UncompressedSize64)
+		readers[".shx"] = readCloser
+		sizes[".shx"] = int64(shxFiles[0].UncompressedSize64)
 	default:
 		return nil, errors.New("too many .shx files")
 	}
@@ -369,30 +430,47 @@ func NewScanner(readers map[string]io.ReadCloser, sizes map[string]int64, option
 		options = &ReadShapefileOptions{}
 	}
 	var scannerSF Scanner
-	if reader, ok := readers["shp"]; ok {
-		if scanner, err := NewScannerSHP(reader, sizes["shp"], options.SHP); err != nil {
+	if reader, ok := readers[".shp"]; ok {
+		if scanner, err := NewScannerSHP(reader, sizes[".shp"], options.SHP); err != nil {
 			return nil, fmt.Errorf("NewScannerSHP: %w", err)
 		} else {
 			scannerSF.SHP = scanner
+			scannerSF.estimatedRecords = int64((sizes[".shp"] - headerSize) / 8)
 		}
 	}
-	if reader, ok := readers["dbf"]; ok {
+	if reader, ok := readers[".cpg"]; ok {
+		if scanner, err := ReadCPG(reader, sizes[".cpg"]); err != nil {
+			return nil, fmt.Errorf("ReadCPG: %w", err)
+		} else {
+			scannerSF.CPG = scanner
+			if options == nil {
+				options = &ReadShapefileOptions{&ReadDBFOptions{Charset: scanner.Charset}, &ReadSHPOptions{}}
+			} else if options.DBF == nil {
+				options.DBF = &ReadDBFOptions{Charset: scanner.Charset}
+			} else {
+				options.DBF.Charset = scanner.Charset
+			}
+		}
+	}
+	if reader, ok := readers[".dbf"]; ok {
 		if scanner, err := NewScannerDBF(reader, options.DBF); err != nil {
 			return nil, fmt.Errorf("NewScannerDBF: %w", err)
 		} else {
 			scannerSF.DBF = scanner
+			scannerSF.estimatedRecords = int64((sizes[".shp"] - dbfHeaderLength) / int64(scanner.header.RecordSize))
 		}
 	}
-	if reader, ok := readers["shx"]; ok {
-		if scanner, err := NewScannerSHX(reader, sizes["shx"]); err != nil {
+	if reader, ok := readers[".shx"]; ok {
+		if scanner, err := NewScannerSHX(reader, sizes[".shx"]); err != nil {
 			return nil, fmt.Errorf("NewScannerSHX: %w", err)
 		} else {
 			scannerSF.SHX = scanner
+			scannerSF.estimatedRecords = int64((sizes[".shx"] - headerSize) / 8)
 		}
 	}
-	if reader, ok := readers["prj"]; ok {
-		if scanner, err := ReadPRJ(reader, sizes["prj"]); err != nil {
-			return nil, fmt.Errorf("NewScannerSHP: %w", err)
+	if reader, ok := readers[".prj"]; ok {
+		if scanner, err := ReadPRJ(reader, sizes[".prj"]); err != nil {
+			return nil, fmt.Errorf("ReadPRJ: %w", err)
 		} else {
 			scannerSF.PRJ = scanner
 		}
@@ -437,34 +515,43 @@ func (s *Scanner) Scan() (*ScanRecord, error) {
 
 // Discard ...
 func (s *Scanner) Discard(n int) (int, error) {
-	var nByte int
 	if s.DBF != nil {
 		nb, err := s.DBF.reader.Discard(n * s.DBF.header.RecordSize)
 		if err != nil {
-			return nb, err
+			return nb / s.DBF.header.RecordSize, err
 		}
-		nByte = nb
+		s.DBF.scanRecords += n
 	}
 	if s.SHX != nil {
+		data, err := s.SHX.reader.Peek(8)
+		if err != nil {
+			return 0, err
+		}
+		record := ParseSHXRecord(data)
+		offsetInit := record.Offset
 		nb, err := s.SHX.reader.Discard(n * 8)
 		if err != nil {
-			return nb, err
+			return nb / 8, err
 		}
-		nByte = n
+		s.SHX.scanRecords += n
 		if s.SHP != nil {
 			data, err := s.SHX.reader.Peek(8)
 			if err != nil {
 				return 0, err
 			}
 			record := ParseSHXRecord(data)
-			nb, err := s.DBF.reader.Discard(record.Offset)
+			offsetEnd := record.Offset
+			nb, err := s.DBF.reader.Discard(offsetEnd - offsetInit)
 			if err != nil {
-				return nb, err
+				return nb / record.ContentLength, err
 			}
-			nByte = nb
+			s.SHP.scanRecords += n
 		}
+	} else if s.SHP != nil {
+		return 0, fmt.Errorf("can't discard .shp file without .shx file")
 	}
-	return nByte, nil
+	s.scanRecords += int64(n)
+	return n, nil
 }
 
 func (s *Scanner) Close() error {
@@ -479,6 +566,18 @@ func (s *Scanner) Close() error {
 		err = errors.Join(err, s.SHX.reader.Close())
 	}
 	return err
+}
+
+func (s Scanner) Records() int64 {
+	return s.scanRecords
+}
+
+func (s Scanner) EstimatedRecords() int64 {
+	return s.estimatedRecords
+}
+
+func (s Scanner) Error() error {
+	return s.err
 }
 
 // SHP
@@ -566,6 +665,7 @@ type ScannerDBF struct {
 	options          *ReadDBFOptions
 	header           *DBFHeader
 	fieldDescriptors []*DBFFieldDescriptor
+	decoder          *encoding.Decoder
 	scanRecords      int
 	err              error
 }
@@ -621,11 +721,23 @@ func NewScannerDBF(reader io.ReadCloser, options *ReadDBFOptions) (*ScannerDBF, 
 		return nil, fmt.Errorf("invalid total length of fields")
 	}
 
+	var decoder *encoding.Decoder
+	if options != nil && options.Charset != "" {
+		enc, _ := charset.Lookup(options.Charset)
+		if enc == nil {
+			return nil, fmt.Errorf("unkown charset '%s'", options.Charset)
+		}
+		decoder = enc.NewDecoder()
+	} else {
+		decoder = charmap.ISO8859_1.NewDecoder()
+	}
+
 	return &ScannerDBF{
 		reader:           bufioReadCloser{bufio.NewReader(reader), reader},
 		options:          options,
 		header:           header,
 		fieldDescriptors: fieldDescriptors,
+		decoder:          decoder,
 	}, nil
 }
 
@@ -648,7 +760,7 @@ func (s *ScannerDBF) Scan() (DBFRecord, error) {
 		for _, fieldDescriptor := range s.fieldDescriptors {
 			fieldData := recordData[offset : offset+fieldDescriptor.Length]
 			offset += fieldDescriptor.Length
-			field, err := fieldDescriptor.ParseRecord(fieldData)
+			field, err := fieldDescriptor.ParseRecord(fieldData, s.decoder)
 			if err != nil {
 				s.err = fmt.Errorf("field %s: %w", fieldDescriptor.Name, err)
 				return nil, s.err

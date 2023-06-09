@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/net/html/charset"
+	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 )
 
@@ -46,8 +48,6 @@ var (
 		't': true,
 		'y': true,
 	}
-
-	iso8859_1Decoder = charmap.ISO8859_1.NewDecoder()
 )
 
 // A DBFHeader is a DBF header.
@@ -86,13 +86,14 @@ type ReadDBFOptions struct {
 	MaxHeaderSize int
 	MaxRecordSize int
 	MaxRecords    int
+	Charset       string
 }
 
 // A DBFMemo is a DBF memo.
 type DBFMemo string
 
 // ReadDBF reads a DBF from an io.Reader.
-func ReadDBF(r io.Reader, size int64, options *ReadDBFOptions) (*DBF, error) {
+func ReadDBF(r io.Reader, _ int64, options *ReadDBFOptions) (*DBF, error) {
 	headerData := make([]byte, dbfHeaderLength)
 	if err := readFull(r, headerData); err != nil {
 		return nil, err
@@ -145,6 +146,16 @@ func ReadDBF(r io.Reader, size int64, options *ReadDBFOptions) (*DBF, error) {
 		return nil, errors.New("invalid total length of fields")
 	}
 
+	var decoder *encoding.Decoder
+	if options != nil && options.Charset != "" {
+		enc, _ := charset.Lookup(options.Charset)
+		if enc == nil {
+			return nil, fmt.Errorf("unkown charset '%s'", options.Charset)
+		}
+		decoder = enc.NewDecoder()
+	} else {
+		decoder = charmap.ISO8859_1.NewDecoder()
+	}
 	records := make([][]any, 0, header.Records)
 	for i := 0; i < header.Records; i++ {
 		recordData := make([]byte, header.RecordSize)
@@ -158,7 +169,7 @@ func ReadDBF(r io.Reader, size int64, options *ReadDBFOptions) (*DBF, error) {
 			for _, fieldDescriptor := range fieldDescriptors {
 				fieldData := recordData[offset : offset+fieldDescriptor.Length]
 				offset += fieldDescriptor.Length
-				field, err := fieldDescriptor.ParseRecord(fieldData)
+				field, err := fieldDescriptor.ParseRecord(fieldData, decoder)
 				if err != nil {
 					return nil, fmt.Errorf("field %s: %w", fieldDescriptor.Name, err)
 				}
@@ -267,10 +278,10 @@ func (d *DBF) Record(i int) map[string]any {
 }
 
 // ParseRecord parses a record from data.
-func (d *DBFFieldDescriptor) ParseRecord(data []byte) (any, error) {
+func (d *DBFFieldDescriptor) ParseRecord(data []byte, decoder *encoding.Decoder) (any, error) {
 	switch d.Type {
 	case 'C':
-		return parseCharacter(data)
+		return parseCharacter(data, decoder)
 	case 'D':
 		return parseDate(data)
 	case 'F':
@@ -296,8 +307,11 @@ func TrimTrailingZeros(data []byte) []byte {
 	return nil
 }
 
-func parseCharacter(data []byte) (string, error) {
-	return iso8859_1Decoder.String(string(bytes.TrimSpace(TrimTrailingZeros(data))))
+func parseCharacter(data []byte, decoder *encoding.Decoder) (string, error) {
+	if decoder == nil {
+		return "", fmt.Errorf("decoder is nil")
+	}
+	return decoder.String(string(bytes.TrimSpace(TrimTrailingZeros(data))))
 }
 
 func parseDate(data []byte) (time.Time, error) {

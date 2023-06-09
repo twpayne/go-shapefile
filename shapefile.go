@@ -70,6 +70,7 @@ var (
 type Shapefile struct {
 	DBF *DBF
 	PRJ *PRJ
+	CPG *CPG
 	SHP *SHP
 	SHX *SHX
 }
@@ -86,6 +87,24 @@ func Read(basename string, options *ReadShapefileOptions) (*Shapefile, error) {
 		options = &ReadShapefileOptions{}
 	}
 
+	var cpg *CPG
+	cpgFile, cpgSize, err := openWithSize(basename + ".cpg")
+	if cpgFile != nil {
+		defer cpgFile.Close()
+	}
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		// Do nothing.
+	case err != nil:
+		return nil, fmt.Errorf("%s.cpg: %w", basename, err)
+	default:
+		var err error
+		cpg, err = ReadCPG(cpgFile, cpgSize)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	var dbf *DBF
 	dbfFile, dbfSize, err := openWithSize(basename + ".dbf")
 	if dbfFile != nil {
@@ -98,7 +117,18 @@ func Read(basename string, options *ReadShapefileOptions) (*Shapefile, error) {
 		return nil, fmt.Errorf("%s.dbf: %w", basename, err)
 	default:
 		var err error
-		dbf, err = ReadDBF(dbfFile, dbfSize, options.DBF)
+		var readDBFOptions *ReadDBFOptions
+		if options != nil {
+			readDBFOptions = options.DBF
+		}
+		if cpg != nil {
+			if readDBFOptions == nil {
+				readDBFOptions = &ReadDBFOptions{Charset: cpg.Charset}
+			} else {
+				readDBFOptions.Charset = cpg.Charset
+			}
+		}
+		dbf, err = ReadDBF(dbfFile, dbfSize, readDBFOptions)
 		if err != nil {
 			return nil, err
 		}
@@ -167,6 +197,7 @@ func Read(basename string, options *ReadShapefileOptions) (*Shapefile, error) {
 	return &Shapefile{
 		DBF: dbf,
 		PRJ: prj,
+		CPG: cpg,
 		SHP: shp,
 		SHX: shx,
 	}, nil
@@ -174,6 +205,24 @@ func Read(basename string, options *ReadShapefileOptions) (*Shapefile, error) {
 
 // ReadFS reads a Shapefile from fsys with the given basename.
 func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapefile, error) {
+	var cpg *CPG
+	switch cpgFile, err := fsys.Open(basename + ".cpg"); {
+	case errors.Is(err, fs.ErrNotExist):
+		// Do nothing.
+	case err != nil:
+		return nil, err
+	default:
+		defer cpgFile.Close()
+		fileInfo, err := cpgFile.Stat()
+		if err != nil {
+			return nil, err
+		}
+		cpg, err = ReadCPG(cpgFile, fileInfo.Size())
+		if err != nil {
+			return nil, fmt.Errorf("%s.cpg: %w", basename, err)
+		}
+	}
+
 	var dbf *DBF
 	switch dbfFile, err := fsys.Open(basename + ".dbf"); {
 	case errors.Is(err, fs.ErrNotExist):
@@ -189,6 +238,13 @@ func ReadFS(fsys fs.FS, basename string, options *ReadShapefileOptions) (*Shapef
 		var readDBFOptions *ReadDBFOptions
 		if options != nil {
 			readDBFOptions = options.DBF
+		}
+		if cpg != nil {
+			if readDBFOptions == nil {
+				readDBFOptions = &ReadDBFOptions{Charset: cpg.Charset}
+			} else {
+				readDBFOptions.Charset = cpg.Charset
+			}
 		}
 		dbf, err = ReadDBF(dbfFile, fileInfo.Size(), readDBFOptions)
 		if err != nil {
@@ -291,6 +347,7 @@ func ReadZipFile(name string, options *ReadShapefileOptions) (*Shapefile, error)
 func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shapefile, error) {
 	var dbfFiles []*zip.File
 	var prjFiles []*zip.File
+	var cpgFiles []*zip.File
 	var shxFiles []*zip.File
 	var shpFiles []*zip.File
 	for _, zipFile := range zipReader.File {
@@ -299,11 +356,26 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 			dbfFiles = append(dbfFiles, zipFile)
 		case ".prj":
 			prjFiles = append(prjFiles, zipFile)
+		case ".cpg":
+			cpgFiles = append(cpgFiles, zipFile)
 		case ".shp":
 			shpFiles = append(shpFiles, zipFile)
 		case ".shx":
 			shxFiles = append(shxFiles, zipFile)
 		}
+	}
+	var cpg *CPG
+	switch len(cpgFiles) {
+	case 0:
+		// Do nothing.
+	case 1:
+		var err error
+		cpg, err = ReadCPGZipFile(cpgFiles[0])
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, errors.New("too many .cpg files")
 	}
 
 	var dbf *DBF
@@ -314,6 +386,13 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 		var readDBFOptions *ReadDBFOptions
 		if options != nil {
 			readDBFOptions = options.DBF
+		}
+		if cpg != nil {
+			if readDBFOptions == nil {
+				readDBFOptions = &ReadDBFOptions{Charset: cpg.Charset}
+			} else {
+				readDBFOptions.Charset = cpg.Charset
+			}
 		}
 		var err error
 		dbf, err = ReadDBFZipFile(dbfFiles[0], readDBFOptions)
@@ -379,6 +458,7 @@ func ReadZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Shape
 	return &Shapefile{
 		DBF: dbf,
 		PRJ: prj,
+		CPG: cpg,
 		SHP: shp,
 		SHX: shx,
 	}, nil
