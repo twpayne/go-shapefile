@@ -576,6 +576,10 @@ func (s Scanner) EstimatedRecords() int64 {
 	return s.estimatedRecords
 }
 
+func (s Scanner) FieldDescriptors() []*DBFFieldDescriptor {
+	return s.DBF.fieldDescriptors
+}
+
 func (s Scanner) Error() error {
 	return s.err
 }
