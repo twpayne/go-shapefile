@@ -134,23 +134,24 @@ func (s ScanRecord) Export(exporter *ScanExporter) any {
 			if val.Type().Kind() == reflect.Pointer {
 				valTp = val.Elem().Type()
 			}
-			switch valTp {
-			case reflect.TypeOf((*geom.T)(nil)).Elem():
+			switch {
+			case valTp.ConvertibleTo(reflect.TypeOf((*geom.T)(nil)).Elem()):
 				target = reflect.ValueOf(s.SPH.Geom)
-			case reflect.TypeOf((*geojson.Geometry)(nil)).Elem():
+			case valTp.ConvertibleTo(reflect.TypeOf((*geojson.Geometry)(nil)).Elem()):
 				if gg, err := geojson.Encode(s.SPH.Geom); err == nil {
-					target = reflect.ValueOf(gg)
+					target = reflect.ValueOf(*gg)
 				}
-			case reflect.TypeOf((*string)(nil)).Elem():
+			case valTp.ConvertibleTo(reflect.TypeOf((*string)(nil)).Elem()):
 				if str, err := wkt.NewEncoder().Encode(s.SPH.Geom); err == nil {
 					target = reflect.ValueOf(str)
 				}
-			case reflect.TypeOf([]byte(nil)):
+			case valTp.ConvertibleTo(reflect.TypeOf([]byte(nil))):
 				if bt, err := wkb.Marshal(s.SPH.Geom, binary.BigEndian); err == nil {
 					target = reflect.ValueOf(bt)
+
 				}
 			}
-			if target.IsValid() && target.CanConvert(val.Type()) {
+			if target.IsValid() && target.CanConvert(valTp) {
 				if val.Type().Kind() == reflect.Pointer {
 					val.Set(target.Convert(val.Type()).Addr())
 				} else {
