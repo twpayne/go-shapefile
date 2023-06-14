@@ -8,6 +8,7 @@ package shapefile
 import (
 	"archive/zip"
 	"bufio"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	"github.com/ettle/strcase"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
+	"github.com/twpayne/go-geom/encoding/wkb"
 	"github.com/twpayne/go-geom/encoding/wkt"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
@@ -142,6 +144,10 @@ func (s ScanRecord) Export(exporter *ScanExporter) any {
 			case reflect.TypeOf((*string)(nil)).Elem():
 				if str, err := wkt.NewEncoder().Encode(s.SPH.Geom); err == nil {
 					target = reflect.ValueOf(str)
+				}
+			case reflect.TypeOf([]byte(nil)):
+				if bt, err := wkb.Marshal(s.SPH.Geom, binary.BigEndian); err == nil {
+					target = reflect.ValueOf(bt)
 				}
 			}
 			if target.IsValid() && target.CanConvert(val.Type()) {
