@@ -111,57 +111,102 @@ func (s ScanRecord) Export(exporter *ScanExporter) any {
 	if exporter == nil {
 		return nil
 	}
-	values := reflect.New(exporter.Type)
+	values := reflect.New(exporter.Type).Elem()
 	if s.DBF != nil {
 		props := *s.DBF
 		for i := 0; i < len(props); i++ {
-			val := values.Elem().FieldByName(exporter.FieldStruct[i])
-			target := reflect.ValueOf(props[i])
-			if val.IsValid() && target.IsValid() && target.CanConvert(val.Type()) {
-				if val.Type().Kind() == reflect.Pointer {
-					val.Set(target.Convert(val.Type()).Addr())
+			val := values.FieldByName(exporter.FieldStruct[i])
+			if val.IsValid() {
+				valType := val.Type()
+				if valType.Kind() == reflect.Pointer {
+					target := reflect.ValueOf(props[i])
+					if target.IsValid() && target.CanConvert(valType.Elem()) {
+						aux := reflect.New(valType.Elem())
+						aux.Elem().Set(target.Convert(valType.Elem()))
+						val.Set(aux)
+					}
 				} else {
-					val.Set(target.Convert(val.Type()))
+					target := reflect.ValueOf(props[i])
+					if target.IsValid() && target.CanConvert(valType) {
+						val.Set(target.Convert(valType))
+					}
 				}
 			}
 		}
 	}
 	if s.SPH != nil {
-		val := values.Elem().FieldByName(exporter.FieldStruct[-1])
-		var target reflect.Value
+		val := values.FieldByName(exporter.FieldStruct[-1])
 		if val.IsValid() {
-			valTp := val.Type()
-			if val.Type().Kind() == reflect.Pointer {
-				valTp = val.Elem().Type()
-			}
-			switch {
-			case valTp.ConvertibleTo(reflect.TypeOf((*geom.T)(nil)).Elem()):
-				target = reflect.ValueOf(s.SPH.Geom)
-			case valTp.ConvertibleTo(reflect.TypeOf((*geojson.Geometry)(nil)).Elem()):
-				if gg, err := geojson.Encode(s.SPH.Geom); err == nil {
-					target = reflect.ValueOf(*gg)
+			valType := val.Type()
+			if valType.Kind() == reflect.Pointer {
+				if valType.ConvertibleTo(reflect.TypeOf((*geom.T)(nil))) {
+					target := reflect.ValueOf(s.SPH.Geom)
+					if target.IsValid() && target.CanConvert(valType.Elem()) {
+						aux := reflect.New(valType.Elem())
+						aux.Elem().Set(target.Convert(valType.Elem()))
+						val.Set(aux)
+					}
+				} else if valType.ConvertibleTo(reflect.TypeOf((*geojson.Geometry)(nil))) {
+					if gg, err := geojson.Encode(s.SPH.Geom); err == nil {
+						target := reflect.ValueOf(*gg)
+						if target.IsValid() && target.CanConvert(valType.Elem()) {
+							aux := reflect.New(valType.Elem())
+							aux.Elem().Set(target.Convert(valType.Elem()))
+							val.Set(aux)
+						}
+					}
+				} else if valType.ConvertibleTo(reflect.TypeOf((*string)(nil))) {
+					if str, err := wkt.NewEncoder().Encode(s.SPH.Geom); err == nil {
+						target := reflect.ValueOf(str)
+						if target.IsValid() && target.CanConvert(valType.Elem()) {
+							aux := reflect.New(valType.Elem())
+							aux.Elem().Set(target.Convert(valType.Elem()))
+							val.Set(aux)
+						}
+					}
+				} else if valType.ConvertibleTo(reflect.TypeOf((*[]byte)(nil))) {
+					if bt, err := wkb.Marshal(s.SPH.Geom, binary.BigEndian); err == nil {
+						target := reflect.ValueOf(bt)
+						if target.IsValid() && target.CanConvert(valType.Elem()) {
+							aux := reflect.New(valType.Elem())
+							aux.Elem().Set(target.Convert(valType.Elem()))
+							val.Set(aux)
+						}
+					}
 				}
-			case valTp.ConvertibleTo(reflect.TypeOf((*string)(nil)).Elem()):
-				if str, err := wkt.NewEncoder().Encode(s.SPH.Geom); err == nil {
-					target = reflect.ValueOf(str)
-				}
-			case valTp.ConvertibleTo(reflect.TypeOf([]byte(nil))):
-				if bt, err := wkb.Marshal(s.SPH.Geom, binary.BigEndian); err == nil {
-					target = reflect.ValueOf(bt)
-
-				}
-			}
-			if target.IsValid() && target.CanConvert(valTp) {
-				if val.Type().Kind() == reflect.Pointer {
-					val.Set(target.Convert(val.Type()).Addr())
-				} else {
-					val.Set(target.Convert(val.Type()))
+			} else {
+				if valType.ConvertibleTo(reflect.TypeOf((*geom.T)(nil)).Elem()) {
+					target := reflect.ValueOf(s.SPH.Geom)
+					if target.IsValid() && target.CanConvert(valType) {
+						val.Set(target.Convert(valType))
+					}
+				} else if valType.ConvertibleTo(reflect.TypeOf((*geojson.Geometry)(nil)).Elem()) {
+					if gg, err := geojson.Encode(s.SPH.Geom); err == nil {
+						target := reflect.ValueOf(*gg)
+						if target.IsValid() && target.CanConvert(valType) {
+							val.Set(target.Convert(valType))
+						}
+					}
+				} else if valType.ConvertibleTo(reflect.TypeOf((*string)(nil)).Elem()) {
+					if str, err := wkt.NewEncoder().Encode(s.SPH.Geom); err == nil {
+						target := reflect.ValueOf(str)
+						if target.IsValid() && target.CanConvert(valType) {
+							val.Set(target.Convert(valType))
+						}
+					}
+				} else if valType.ConvertibleTo(reflect.TypeOf(([]byte)(nil))) {
+					if bt, err := wkb.Marshal(s.SPH.Geom, binary.BigEndian); err == nil {
+						target := reflect.ValueOf(bt)
+						if target.IsValid() && target.CanConvert(valType) {
+							val.Set(target.Convert(valType))
+						}
+					}
 				}
 			}
 		}
 	}
 
-	return values.Elem().Interface()
+	return values.Interface()
 }
 
 // Scanner ...
