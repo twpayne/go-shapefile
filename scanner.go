@@ -593,7 +593,7 @@ func (s *Scanner) Discard(n int) (int, error) {
 			}
 			record := ParseSHXRecord(data)
 			offsetEnd := record.Offset
-			nb, err := s.DBF.reader.Discard(offsetEnd - offsetInit)
+			nb, err := s.SHP.reader.Discard(offsetEnd - offsetInit)
 			if err != nil {
 				return nb / record.ContentLength, err
 			}
