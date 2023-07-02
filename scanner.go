@@ -16,12 +16,14 @@ import (
 	"path"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/ettle/strcase"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
 	"github.com/twpayne/go-geom/encoding/wkt"
+	"golang.org/x/exp/constraints"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
@@ -481,20 +483,13 @@ func NewScanner(readers map[string]io.ReadCloser, sizes map[string]int64, option
 	if options == nil {
 		options = &ReadShapefileOptions{}
 	}
-	var scannerSF Scanner
-	if reader, ok := readers[".shp"]; ok {
-		if scanner, err := NewScannerSHP(reader, sizes[".shp"], options.SHP); err != nil {
-			return nil, fmt.Errorf("NewScannerSHP: %w", err)
-		} else {
-			scannerSF.SHP = scanner
-			scannerSF.estimatedRecords = int64((sizes[".shp"] - headerSize) / 8)
-		}
-	}
+
+	var cpg *CPG
 	if reader, ok := readers[".cpg"]; ok {
 		if scanner, err := ReadCPG(reader, sizes[".cpg"]); err != nil {
 			return nil, fmt.Errorf("ReadCPG: %w", err)
 		} else {
-			scannerSF.CPG = scanner
+			cpg = scanner
 			if options == nil {
 				options = &ReadShapefileOptions{&ReadDBFOptions{Charset: scanner.Charset}, &ReadSHPOptions{}}
 			} else if options.DBF == nil {
@@ -504,30 +499,82 @@ func NewScanner(readers map[string]io.ReadCloser, sizes map[string]int64, option
 			}
 		}
 	}
-	if reader, ok := readers[".dbf"]; ok {
-		if scanner, err := NewScannerDBF(reader, options.DBF); err != nil {
-			return nil, fmt.Errorf("NewScannerDBF: %w", err)
-		} else {
-			scannerSF.DBF = scanner
-			scannerSF.estimatedRecords = int64((sizes[".shp"] - dbfHeaderLength) / int64(scanner.header.RecordSize))
-		}
-	}
-	if reader, ok := readers[".shx"]; ok {
-		if scanner, err := NewScannerSHX(reader, sizes[".shx"]); err != nil {
-			return nil, fmt.Errorf("NewScannerSHX: %w", err)
-		} else {
-			scannerSF.SHX = scanner
-			scannerSF.estimatedRecords = int64((sizes[".shx"] - headerSize) / 8)
-		}
-	}
+
+	var prj *PRJ
 	if reader, ok := readers[".prj"]; ok {
 		if scanner, err := ReadPRJ(reader, sizes[".prj"]); err != nil {
 			return nil, fmt.Errorf("ReadPRJ: %w", err)
 		} else {
-			scannerSF.PRJ = scanner
+			prj = scanner
 		}
 	}
-	return &scannerSF, nil
+
+	var wg sync.WaitGroup
+	var scannerSHP *ScannerSHP
+	var scannerSHX *ScannerSHX
+	var scannerDBF *ScannerDBF
+	var estimatedSHX, estimatedDBF int64
+	var errSHP, errSHX, errDBF error
+
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		if reader, ok := readers[".shp"]; ok {
+			if scanner, err := NewScannerSHP(reader, sizes[".shp"], options.SHP); err != nil {
+				errSHP = fmt.Errorf("NewScannerSHP: %w", err)
+			} else {
+				scannerSHP = scanner
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if reader, ok := readers[".dbf"]; ok {
+			if scanner, err := NewScannerDBF(reader, options.DBF); err != nil {
+				errDBF = fmt.Errorf("NewScannerDBF: %w", err)
+			} else {
+				scannerDBF = scanner
+				estimatedDBF = int64((sizes[".dbf"] - dbfHeaderLength) / int64(scanner.header.RecordSize))
+			}
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if reader, ok := readers[".shx"]; ok {
+			if scanner, err := NewScannerSHX(reader, sizes[".shx"]); err != nil {
+				errSHX = fmt.Errorf("NewScannerSHX: %w", err)
+			} else {
+				scannerSHX = scanner
+				estimatedSHX = int64((sizes[".shx"] - headerSize) / 8)
+			}
+		}
+	}()
+
+	wg.Wait()
+	if err := errors.Join(errSHP, errDBF, errSHX); err != nil {
+		return nil, err
+	}
+
+	return &Scanner{
+		SHP:              scannerSHP,
+		SHX:              scannerSHX,
+		DBF:              scannerDBF,
+		PRJ:              prj,
+		CPG:              cpg,
+		estimatedRecords: max(estimatedDBF, estimatedSHX),
+	}, nil
+}
+
+func max[T constraints.Ordered](x ...T) T {
+	var r T
+	for i := range x {
+		if r < x[i] {
+			r = x[i]
+		}
+	}
+	return r
 }
 
 // Scan
@@ -536,72 +583,124 @@ func (s *Scanner) Scan() (*ScanRecord, error) {
 		return nil, s.err
 	}
 
-	var scanRecord ScanRecord
-	if s.SHP != nil {
-		if record, err := s.SHP.Scan(); err != nil {
-			s.err = errors.Join(s.err, fmt.Errorf("Scan SHP: %w", err))
-			return nil, s.err
-		} else {
-			scanRecord.SPH = record
+	var wg sync.WaitGroup
+	var recordSHP *SHPRecord
+	var recordSHX *SHXRecord
+	var recordDBF *DBFRecord
+	var errSHP, errSHX, errDBF error
+
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		if s.SHP != nil {
+			if record, err := s.SHP.Scan(); err != nil {
+				errSHP = fmt.Errorf("Scan SHP: %w", err)
+			} else {
+				recordSHP = record
+			}
 		}
-	}
-	if s.DBF != nil {
-		if record, err := s.DBF.Scan(); err != nil {
-			s.err = errors.Join(s.err, fmt.Errorf("Scan DBF: %w", err))
-			return nil, s.err
-		} else {
-			scanRecord.DBF = &record
+	}()
+
+	go func() {
+		defer wg.Done()
+		if s.DBF != nil {
+			if record, err := s.DBF.Scan(); err != nil {
+				errDBF = fmt.Errorf("Scan DBF: %w", err)
+			} else {
+				recordDBF = &record
+			}
 		}
-	}
-	if s.SHX != nil {
-		if record, err := s.SHX.Scan(); err != nil {
-			s.err = errors.Join(s.err, fmt.Errorf("Scan SHX: %w", err))
-			return nil, s.err
-		} else {
-			scanRecord.SHX = record
+	}()
+
+	go func() {
+		defer wg.Done()
+		if s.SHX != nil {
+			if record, err := s.SHX.Scan(); err != nil {
+				errSHX = fmt.Errorf("Scan SHX: %w", err)
+			} else {
+				recordSHX = record
+			}
 		}
+	}()
+
+	wg.Wait()
+	if err := errors.Join(errSHP, errDBF, errSHX); err != nil {
+		return nil, err
 	}
+
 	s.scanRecords++
-	return &scanRecord, nil
+	return &ScanRecord{
+		SPH: recordSHP,
+		SHX: recordSHX,
+		DBF: recordDBF,
+	}, nil
 }
 
 // Discard ...
 func (s *Scanner) Discard(n int) (int, error) {
-	if s.DBF != nil {
-		nb, err := s.DBF.reader.Discard(n * s.DBF.header.RecordSize)
-		if err != nil {
-			return nb / s.DBF.header.RecordSize, err
+	var errSHP, errSHX, errDBF error
+	var nSHP, nSHX, nDBF int
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		if s.DBF != nil {
+			nb, err := s.DBF.reader.Discard(n * s.DBF.header.RecordSize)
+			if err != nil {
+				errDBF = err
+				nDBF = nb / s.DBF.header.RecordSize
+				return
+			}
+			s.DBF.scanRecords += n
 		}
-		s.DBF.scanRecords += n
-	}
-	if s.SHX != nil {
-		data, err := s.SHX.reader.Peek(8)
-		if err != nil {
-			return 0, err
-		}
-		record := ParseSHXRecord(data)
-		offsetInit := record.Offset
-		nb, err := s.SHX.reader.Discard(n * 8)
-		if err != nil {
-			return nb / 8, err
-		}
-		s.SHX.scanRecords += n
-		if s.SHP != nil {
+	}()
+
+	go func() {
+		defer wg.Done()
+		if s.SHX != nil {
 			data, err := s.SHX.reader.Peek(8)
 			if err != nil {
-				return 0, err
+				errSHX = err
+				return
 			}
 			record := ParseSHXRecord(data)
-			offsetEnd := record.Offset
-			nb, err := s.SHP.reader.Discard(offsetEnd - offsetInit)
+			offsetInit := record.Offset
+			nb, err := s.SHX.reader.Discard(n * 8)
 			if err != nil {
-				return nb / record.ContentLength, err
+				nSHX = nb / 8
+				errSHX = err
+				return
 			}
-			s.SHP.scanRecords += n
+			s.SHX.scanRecords += n
+
+			if s.SHP != nil {
+				data, err := s.SHX.reader.Peek(8)
+				if err != nil {
+					errSHX = err
+					return
+				}
+				record := ParseSHXRecord(data)
+				offsetEnd := record.Offset
+				nb, err := s.SHP.reader.Discard(offsetEnd - offsetInit)
+				if err != nil {
+					nSHP = nb / record.ContentLength
+					errSHP = err
+					return
+				}
+				s.SHP.scanRecords += n
+			}
+		} else if s.SHP != nil {
+			errSHP = fmt.Errorf("can't discard .shp file without .shx file")
+			return
 		}
-	} else if s.SHP != nil {
-		return 0, fmt.Errorf("can't discard .shp file without .shx file")
+	}()
+
+	wg.Wait()
+	if err := errors.Join(errSHP, errDBF, errSHX); err != nil {
+		return max(nSHX, nDBF, nSHP), err
 	}
+
 	s.scanRecords += int64(n)
 	return n, nil
 }
@@ -781,7 +880,7 @@ func NewScannerDBF(reader io.ReadCloser, options *ReadDBFOptions) (*ScannerDBF, 
 	if options != nil && options.Charset != "" {
 		enc, _ := charset.Lookup(options.Charset)
 		if enc == nil {
-			return nil, fmt.Errorf("unkown charset '%s'", options.Charset)
+			return nil, fmt.Errorf("unknown charset '%s'", options.Charset)
 		}
 		decoder = enc.NewDecoder()
 	} else {
