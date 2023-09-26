@@ -5,7 +5,6 @@ linters:
   - bodyclose
   - contextcheck
   - decorder
-  - depguard
   - dogsled
   - dupl
   - dupword
@@ -61,6 +60,7 @@ linters:
   disable:
   - asasalint
   - cyclop
+  - depguard
   - exhaustive
   - exhaustivestruct
   - exhaustruct

@@ -92,7 +92,7 @@ type ReadDBFOptions struct {
 type DBFMemo string
 
 // ReadDBF reads a DBF from an io.Reader.
-func ReadDBF(r io.Reader, size int64, options *ReadDBFOptions) (*DBF, error) {
+func ReadDBF(r io.Reader, _ int64, options *ReadDBFOptions) (*DBF, error) {
 	headerData := make([]byte, dbfHeaderLength)
 	if err := readFull(r, headerData); err != nil {
 		return nil, err
