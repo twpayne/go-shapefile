@@ -1,6 +1,6 @@
 module github.com/twpayne/go-shapefile
 
-go 1.19
+go 1.21
 
 require (
 	github.com/ettle/strcase v0.1.1

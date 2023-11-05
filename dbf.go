@@ -2,7 +2,7 @@ package shapefile
 
 // FIXME support dBase version 7 files if needed, see https://www.dbase.com/Knowledgebase/INT/db7_file_fmt.htm
 // FIXME work through https://www.clicketyclick.dk/databases/xbase/format/dbf.html and add any missing features
-// FIXME add unmarshaller that unmarshals a record into a Go struct with `dbf:"..."` tags?s
+// FIXME add unmarshaller that unmarshalls a record into a Go struct with `dbf:"..."` tags?s
 // FIXME validate logical implementation
 // FIXME add support for memos
 
@@ -150,7 +150,7 @@ func ReadDBF(r io.Reader, _ int64, options *ReadDBFOptions) (*DBF, error) {
 	if options != nil && options.Charset != "" {
 		enc, _ := charset.Lookup(options.Charset)
 		if enc == nil {
-			return nil, fmt.Errorf("unkown charset '%s'", options.Charset)
+			return nil, fmt.Errorf("unknown charset '%s'", options.Charset)
 		}
 		decoder = enc.NewDecoder()
 	} else {

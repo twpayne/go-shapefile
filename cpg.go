@@ -9,12 +9,12 @@ import (
 	"golang.org/x/net/html/charset"
 )
 
-// A PRJ is a .cpg file.
+// CPG a CPG is a .cpg file.
 type CPG struct {
 	Charset string
 }
 
-// ReadPRJ reads a CPG from an io.Reader.
+// ReadCPG reads a CPG from an io.Reader.
 func ReadCPG(r io.Reader, _ int64) (*CPG, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -22,7 +22,7 @@ func ReadCPG(r io.Reader, _ int64) (*CPG, error) {
 	}
 	enc, name := charset.Lookup(strings.ToLower(string(data)))
 	if enc == nil {
-		return nil, fmt.Errorf("unkown charset '%s'", (string(data)))
+		return nil, fmt.Errorf("unknown charset '%s'", (string(data)))
 	}
 	return &CPG{
 		Charset: name,

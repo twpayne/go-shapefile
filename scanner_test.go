@@ -32,7 +32,7 @@ func TestReadScanner(t *testing.T) {
 			expectedShapeType:  ShapeTypePolyLine,
 			expectedBounds:     geom.NewBounds(geom.XY).Set(1, 1, 5, 6),
 			expectedNumRecords: 1,
-			expectedGeom0:      newGeomFromWKT(t, "MULTILINESTRING ((1 5,5 5,5 1,3 3,1 1),(3 2,2 6))"), //nolint:dupword
+			expectedGeom0:      newGeomFromWKT(t, "MULTILINESTRING ((1 5,5 5,5 1,3 3,1 1),(3 2,2 6))"),
 		},
 		{
 			basename:           "linem",
@@ -93,7 +93,7 @@ func TestReadScanner(t *testing.T) {
 			expectedShapeType:  ShapeTypePolygon,
 			expectedBounds:     geom.NewBounds(geom.XY).Set(-120, -60, 120, 60),
 			expectedNumRecords: 1,
-			expectedGeom0:      newGeomFromWKT(t, "POLYGON ((-120 60,120 60,120 -60,-120 -60,-120 60),(-60 30,-60 -30,60 -30,60 30,-60 30))"), //nolint:dupword
+			expectedGeom0:      newGeomFromWKT(t, "POLYGON ((-120 60,120 60,120 -60,-120 -60,-120 60),(-60 30,-60 -30,60 -30,60 30,-60 30))"),
 		},
 		{
 			skipReason:         "rings are not closed",
@@ -284,7 +284,7 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 				GZ         string  `geom:"gz"`
 				HoeheFp    float32 `geom:"hoehe_fp"`
 				HoeheObj   float32 `geom:"hoehe_obj"`
-				LFH_ID     int     `geom:"lfh_id"`
+				LfhID      int     `geom:"lfh_id"`
 				Name       string  `geom:"name"`
 				ObjectID   int     `geom:"objectid"`
 				PointX     float64 `geom:"point_x"`
@@ -305,7 +305,7 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 				GZ:         "FA18E-88-1082/2002-18",
 				HoeheFp:    1580.,
 				HoeheObj:   100.,
-				LFH_ID:     2,
+				LfhID:      2,
 				Name:       "Windkraftanlage Windpark Moschkogel WKA 04",
 				ObjectID:   191,
 				PointX:     15.74447664,
