@@ -16,10 +16,21 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/exp/constraints"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 )
+
+func max[T constraints.Ordered](x T, y ...T) T { //nolint: ireturn
+	a := x
+	for _, b := range y {
+		if a < b {
+			a = b
+		}
+	}
+	return a
+}
 
 // bufioReadCloser ...
 type bufioReadCloser = struct {
