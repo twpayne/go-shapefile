@@ -8,21 +8,14 @@ package shapefile
 import (
 	"archive/zip"
 	"bufio"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
-	"reflect"
 	"strings"
 	"sync"
 
-	"github.com/ettle/strcase"
-	"github.com/twpayne/go-geom"
-	"github.com/twpayne/go-geom/encoding/geojson"
-	"github.com/twpayne/go-geom/encoding/wkb"
-	"github.com/twpayne/go-geom/encoding/wkt"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
@@ -34,264 +27,75 @@ type bufioReadCloser = struct {
 	io.Closer
 }
 
-// ScanShapefile ...
-type ScanShapefile struct {
-	SHxHeader        *SHxHeader
-	DBFHeader        *DBFHeader
-	FieldDescriptors []*DBFFieldDescriptor
-	Projection       *string
-	NumRecords       int64
-	Records          []*ScanRecord
-
-	fieldDescOrder map[int]string
-}
-
-// Record ...
-func (s ScanShapefile) Record(i int) (map[string]any, geom.T) {
-	if s.Records[i] == nil {
-		return nil, nil
-	}
-	return s.Records[i].Properties(s.fieldDescOrder), s.Records[i].Geom()
-}
-
-// ScanExporter ...
-type ScanExporter struct {
-	FieldStruct map[int]string
-	Type        reflect.Type
-}
-
-// NewExporter ...
-func NewExporter(t reflect.Type, tag string, fieldDescriptors []*DBFFieldDescriptor) (*ScanExporter, error) {
-	if t == nil || t.Kind() != reflect.Struct {
-		return nil, errors.New("type t is nil or is not a struct")
-	}
-	structTags := make(map[string]string, t.NumField())
-	for j := 0; j < t.NumField(); j++ {
-		fieldType := t.Field(j)
-		tagName := strings.Split(fieldType.Tag.Get(tag), ",")[0]
-		structTags[tagName] = fieldType.Name
-	}
-	fieldStruct := make(map[int]string, len(fieldDescriptors))
-	fieldStruct[-1] = structTags["geometry"]
-	for i, fieldDescriptor := range fieldDescriptors {
-		if name, ok := structTags[strcase.ToSnake(fieldDescriptor.Name)]; ok {
-			fieldStruct[i] = name
-		}
-	}
-	return &ScanExporter{
-		FieldStruct: fieldStruct,
-		Type:        t,
-	}, nil
-}
-
-// ScanRecord ...
-type ScanRecord struct {
-	SPH *SHPRecord
-	SHX *SHXRecord
-	DBF *DBFRecord
-}
-
-// Properties ...
-func (s ScanRecord) Properties(order map[int]string) map[string]any {
-	if s.DBF == nil {
-		return nil
-	}
-	pMap := make(map[string]any)
-	props := *s.DBF
-	for i := 0; i < len(props); i++ {
-		pMap[order[i]] = props[i]
-	}
-	return pMap
-}
-
-// Geom ...
-func (s ScanRecord) Geom() geom.T {
-	if s.SPH == nil {
-		return nil
-	}
-	return s.SPH.Geom
-}
-
-// Export ...
-func (s ScanRecord) Export(exporter *ScanExporter) any {
-	if exporter == nil {
-		return nil
-	}
-	values := reflect.New(exporter.Type).Elem()
-	if s.DBF != nil {
-		props := *s.DBF
-		for i := 0; i < len(props); i++ {
-			val := values.FieldByName(exporter.FieldStruct[i])
-			if val.IsValid() {
-				valType := val.Type()
-				if valType.Kind() == reflect.Pointer {
-					target := reflect.ValueOf(props[i])
-					if target.IsValid() && target.CanConvert(valType.Elem()) {
-						aux := reflect.New(valType.Elem())
-						aux.Elem().Set(target.Convert(valType.Elem()))
-						val.Set(aux)
-					}
-				} else {
-					target := reflect.ValueOf(props[i])
-					if target.IsValid() && target.CanConvert(valType) {
-						val.Set(target.Convert(valType))
-					}
-				}
-			}
-		}
-	}
-	if s.SPH != nil {
-		val := values.FieldByName(exporter.FieldStruct[-1])
-		if val.IsValid() {
-			valType := val.Type()
-			if valType.Kind() == reflect.Pointer {
-				switch {
-				case valType.ConvertibleTo(reflect.TypeOf((*geom.T)(nil))):
-					target := reflect.ValueOf(s.SPH.Geom)
-					if target.IsValid() && target.CanConvert(valType.Elem()) {
-						aux := reflect.New(valType.Elem())
-						aux.Elem().Set(target.Convert(valType.Elem()))
-						val.Set(aux)
-					}
-				case valType.ConvertibleTo(reflect.TypeOf((*geojson.Geometry)(nil))):
-					if gg, err := geojson.Encode(s.SPH.Geom); err == nil {
-						target := reflect.ValueOf(*gg)
-						if target.IsValid() && target.CanConvert(valType.Elem()) {
-							aux := reflect.New(valType.Elem())
-							aux.Elem().Set(target.Convert(valType.Elem()))
-							val.Set(aux)
-						}
-					}
-				case valType.ConvertibleTo(reflect.TypeOf((*string)(nil))):
-					if str, err := wkt.NewEncoder().Encode(s.SPH.Geom); err == nil {
-						target := reflect.ValueOf(str)
-						if target.IsValid() && target.CanConvert(valType.Elem()) {
-							aux := reflect.New(valType.Elem())
-							aux.Elem().Set(target.Convert(valType.Elem()))
-							val.Set(aux)
-						}
-					}
-				case valType.ConvertibleTo(reflect.TypeOf((*[]byte)(nil))):
-					if bt, err := wkb.Marshal(s.SPH.Geom, binary.BigEndian); err == nil {
-						target := reflect.ValueOf(bt)
-						if target.IsValid() && target.CanConvert(valType.Elem()) {
-							aux := reflect.New(valType.Elem())
-							aux.Elem().Set(target.Convert(valType.Elem()))
-							val.Set(aux)
-						}
-					}
-				}
-			} else {
-				switch {
-				case valType.ConvertibleTo(reflect.TypeOf((*geom.T)(nil)).Elem()):
-					target := reflect.ValueOf(s.SPH.Geom)
-					if target.IsValid() && target.CanConvert(valType) {
-						val.Set(target.Convert(valType))
-					}
-				case valType.ConvertibleTo(reflect.TypeOf((*geojson.Geometry)(nil)).Elem()):
-					if gg, err := geojson.Encode(s.SPH.Geom); err == nil {
-						target := reflect.ValueOf(*gg)
-						if target.IsValid() && target.CanConvert(valType) {
-							val.Set(target.Convert(valType))
-						}
-					}
-				case valType.ConvertibleTo(reflect.TypeOf((*string)(nil)).Elem()):
-					if str, err := wkt.NewEncoder().Encode(s.SPH.Geom); err == nil {
-						target := reflect.ValueOf(str)
-						if target.IsValid() && target.CanConvert(valType) {
-							val.Set(target.Convert(valType))
-						}
-					}
-				case valType.ConvertibleTo(reflect.TypeOf(([]byte)(nil))):
-					if bt, err := wkb.Marshal(s.SPH.Geom, binary.BigEndian); err == nil {
-						target := reflect.ValueOf(bt)
-						if target.IsValid() && target.CanConvert(valType) {
-							val.Set(target.Convert(valType))
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return values.Interface()
-}
-
 // Scanner ...
 type Scanner struct {
-	SHP              *ScannerSHP
-	DBF              *ScannerDBF
-	SHX              *ScannerSHX
-	PRJ              *PRJ
-	CPG              *CPG
+	scanSHP          *ScannerSHP
+	scanDBF          *ScannerDBF
+	scanSHX          *ScannerSHX
+	filePRJ          *PRJ
+	fileCPG          *CPG
 	scanRecords      int64
 	estimatedRecords int64
 	err              error
 }
 
-// ReadScannerBasename ...
-func ReadScannerBasename(basename string, options *ReadShapefileOptions) (*ScanShapefile, error) {
-	scanner, err := NewScannerFromBasename(basename, options)
-	if err != nil {
-		return nil, fmt.Errorf("NewScannerFromBasename: %w", err)
+// ReadScanner read a scanner and create a shapefile.
+func ReadScanner(scanner *Scanner) (*Shapefile, error) {
+	if scanner == nil {
+		return nil, nil
 	}
-	defer scanner.Close()
-	sf, err := ReadScanner(scanner)
-	if err != nil {
-		return nil, fmt.Errorf("ReadScanner: %w", err)
-	}
-	return sf, err
-}
+	var shp *SHP
+	var shx *SHX
+	var dbf *DBF
+	var cpg *CPG
+	var prj *PRJ
 
-// ReadScannerZipFile ...
-func ReadScannerZipFile(name string, options *ReadShapefileOptions) (*ScanShapefile, error) {
-	scanner, err := NewScannerFromZipFile(name, options)
-	if err != nil {
-		return nil, fmt.Errorf("NewScannerFromBasename: %w", err)
+	if scanner.SHPHeader() != nil {
+		shp = &SHP{SHxHeader: *scanner.SHPHeader()}
 	}
-	defer scanner.Close()
-	sf, err := ReadScanner(scanner)
-	if err != nil {
-		return nil, fmt.Errorf("ReadScanner: %w", err)
+	if scanner.SHxHeader() != nil {
+		shx = &SHX{SHxHeader: *scanner.SHxHeader()}
 	}
-	return sf, err
-}
 
-// ReadScanner ...
-func ReadScanner(scanner *Scanner) (*ScanShapefile, error) {
-	var sf ScanShapefile
-	for {
-		record, err := scanner.Scan()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return nil, fmt.Errorf("record %d: %w", scanner.scanRecords, err)
+	if scanner.DBFHeader() != nil {
+		dbf = &DBF{DBFHeader: *scanner.DBFHeader(), FieldDescriptors: scanner.DBFFieldDescriptors()}
+	}
+
+	if scanner.Projection() != "" {
+		prj = &PRJ{Projection: scanner.Projection()}
+	}
+
+	if scanner.Charset() != "" {
+		cpg = &CPG{Charset: scanner.Charset()}
+	}
+
+	for scanner.Next() {
+		recSHP, recSHX, recDBF := scanner.Scan()
+		if shp != nil && recSHP != nil {
+			shp.Records = append(shp.Records, recSHP)
 		}
-		sf.Records = append(sf.Records, record)
-	}
-	sf.NumRecords = scanner.scanRecords
-
-	if scanner.SHX != nil {
-		sf.SHxHeader = scanner.SHX.header
-	} else if scanner.SHP != nil {
-		sf.SHxHeader = scanner.SHP.header
-	}
-	if scanner.DBF != nil {
-		sf.DBFHeader = scanner.DBF.header
-		sf.FieldDescriptors = scanner.DBF.fieldDescriptors
-		sf.fieldDescOrder = make(map[int]string, len(sf.FieldDescriptors))
-		for i, field := range sf.FieldDescriptors {
-			sf.fieldDescOrder[i] = field.Name
+		if dbf != nil && recDBF != nil {
+			dbf.Records = append(dbf.Records, recDBF)
+		}
+		if shx != nil && recSHX != nil {
+			shx.Records = append(shx.Records, *recSHX)
 		}
 	}
-	if scanner.PRJ != nil {
-		sf.Projection = &scanner.PRJ.Projection
+
+	if err := scanner.Error(); err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("read scanner [%d]: %w", scanner.scanRecords, err)
 	}
-	return &sf, nil
+
+	return &Shapefile{
+		SHP: shp,
+		DBF: dbf,
+		SHX: shx,
+		PRJ: prj,
+		CPG: cpg,
+	}, nil
 }
 
-// NewScannerFromBasename ...
+// NewScannerFromBasename reads files based of Basename and create a scanner.
 func NewScannerFromBasename(basename string, options *ReadShapefileOptions) (*Scanner, error) {
 	if options == nil {
 		options = &ReadShapefileOptions{}
@@ -362,7 +166,7 @@ func NewScannerFromBasename(basename string, options *ReadShapefileOptions) (*Sc
 	return scanner, nil
 }
 
-// NewScannerFromZipFile ...
+// NewScannerFromZipFile reads a .zip file and create a scanner.
 func NewScannerFromZipFile(name string, options *ReadShapefileOptions) (*Scanner, error) {
 	file, err := os.Open(name)
 	if err != nil {
@@ -387,7 +191,7 @@ func NewScannerFromZipFile(name string, options *ReadShapefileOptions) (*Scanner
 	return scanner, nil
 }
 
-// NewScannerFromZipReader ...
+// NewScannerFromZipReader reads a *zip.Reader and create a scanner.
 func NewScannerFromZipReader(zipReader *zip.Reader, options *ReadShapefileOptions) (*Scanner, error) {
 	var dbfFiles []*zip.File
 	var prjFiles []*zip.File
@@ -489,7 +293,7 @@ func NewScannerFromZipReader(zipReader *zip.Reader, options *ReadShapefileOption
 	return scanner, nil
 }
 
-// NewScanner ...
+// NewScanner Create a new scanner.
 func NewScanner(
 	readers map[string]io.ReadCloser,
 	sizes map[string]int64,
@@ -536,35 +340,35 @@ func NewScanner(
 	go func() {
 		defer wg.Done()
 		if reader, ok := readers[".shp"]; ok {
-			if scanner, err := NewScannerSHP(reader, sizes[".shp"], options.SHP); err != nil {
+			scanner, err := NewScannerSHP(reader, sizes[".shp"], options.SHP)
+			if err != nil {
 				errSHP = fmt.Errorf("NewScannerSHP: %w", err)
-			} else {
-				scannerSHP = scanner
 			}
+			scannerSHP = scanner
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
 		if reader, ok := readers[".dbf"]; ok {
-			if scanner, err := NewScannerDBF(reader, options.DBF); err != nil {
+			scanner, err := NewScannerDBF(reader, options.DBF)
+			if err != nil {
 				errDBF = fmt.Errorf("NewScannerDBF: %w", err)
-			} else {
-				scannerDBF = scanner
-				estimatedDBF = (sizes[".dbf"] - dbfHeaderLength) / int64(scanner.header.RecordSize)
 			}
+			scannerDBF = scanner
+			estimatedDBF = (sizes[".dbf"] - dbfHeaderLength) / int64(scanner.header.RecordSize)
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
 		if reader, ok := readers[".shx"]; ok {
-			if scanner, err := NewScannerSHX(reader, sizes[".shx"]); err != nil {
+			scanner, err := NewScannerSHX(reader, sizes[".shx"])
+			if err != nil {
 				errSHX = fmt.Errorf("NewScannerSHX: %w", err)
-			} else {
-				scannerSHX = scanner
-				estimatedSHX = (sizes[".shx"] - headerSize) / 8
 			}
+			scannerSHX = scanner
+			estimatedSHX = (sizes[".shx"] - headerSize) / 8
 		}
 	}()
 
@@ -574,33 +378,31 @@ func NewScanner(
 	}
 
 	return &Scanner{
-		SHP:              scannerSHP,
-		SHX:              scannerSHX,
-		DBF:              scannerDBF,
-		PRJ:              prj,
-		CPG:              cpg,
+		scanSHP:          scannerSHP,
+		scanSHX:          scannerSHX,
+		scanDBF:          scannerDBF,
+		filePRJ:          prj,
+		fileCPG:          cpg,
 		estimatedRecords: max(estimatedDBF, estimatedSHX),
 	}, nil
 }
 
-// Scan ...
-func (s *Scanner) Scan() (*ScanRecord, error) {
+// Scan Scanner records.
+func (s *Scanner) Scan() (recordSHP *SHPRecord, recordSHX *SHXRecord, recordDBF DBFRecord) {
 	if s.err != nil {
-		return nil, s.err
+		return nil, nil, nil
 	}
 
 	var wg sync.WaitGroup
-	var recordSHP *SHPRecord
-	var recordSHX *SHXRecord
-	var recordDBF *DBFRecord
 	var errSHP, errSHX, errDBF error
 
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		if s.SHP != nil {
-			if record, err := s.SHP.Scan(); err != nil {
-				errSHP = fmt.Errorf("Scan SHP: %w", err)
+		if s.scanSHP != nil {
+			record, err := s.scanSHP.Scan()
+			if err != nil {
+				errSHP = fmt.Errorf("scanning SHP: %w", err)
 			} else {
 				recordSHP = record
 			}
@@ -609,20 +411,20 @@ func (s *Scanner) Scan() (*ScanRecord, error) {
 
 	go func() {
 		defer wg.Done()
-		if s.DBF != nil {
-			if record, err := s.DBF.Scan(); err != nil {
-				errDBF = fmt.Errorf("Scan DBF: %w", err)
+		if s.scanDBF != nil {
+			if record, err := s.scanDBF.Scan(); err != nil {
+				errDBF = fmt.Errorf("scanning DBF: %w", err)
 			} else {
-				recordDBF = &record
+				recordDBF = record
 			}
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		if s.SHX != nil {
-			if record, err := s.SHX.Scan(); err != nil {
-				errSHX = fmt.Errorf("Scan SHX: %w", err)
+		if s.scanSHX != nil {
+			if record, err := s.scanSHX.Scan(); err != nil {
+				errSHX = fmt.Errorf("scanning SHX: %w", err)
 			} else {
 				recordSHX = record
 			}
@@ -631,18 +433,19 @@ func (s *Scanner) Scan() (*ScanRecord, error) {
 
 	wg.Wait()
 	if err := errors.Join(errSHP, errDBF, errSHX); err != nil {
-		return nil, err
+		s.err = err
+		return nil, nil, nil
 	}
 
 	s.scanRecords++
-	return &ScanRecord{
-		SPH: recordSHP,
-		SHX: recordSHX,
-		DBF: recordDBF,
-	}, nil
+	return recordSHP, recordSHX, recordDBF
 }
 
-// Discard ...
+func (s *Scanner) Next() bool {
+	return s.err == nil
+}
+
+// Discard Discards n records for concurrent scan.
 func (s *Scanner) Discard(n int) (int, error) {
 	var errSHP, errSHX, errDBF error
 	var nSHP, nSHX, nDBF int
@@ -651,52 +454,52 @@ func (s *Scanner) Discard(n int) (int, error) {
 
 	go func() {
 		defer wg.Done()
-		if s.DBF != nil {
-			nb, err := s.DBF.reader.Discard(n * s.DBF.header.RecordSize)
+		if s.scanDBF != nil {
+			nb, err := s.scanDBF.reader.Discard(n * s.scanDBF.header.RecordSize)
 			if err != nil {
 				errDBF = err
-				nDBF = nb / s.DBF.header.RecordSize
+				nDBF = nb / s.scanDBF.header.RecordSize
 				return
 			}
-			s.DBF.scanRecords += n
+			s.scanDBF.scanRecords += n
 		}
 	}()
 
 	go func() {
 		defer wg.Done()
-		if s.SHX != nil {
-			data, err := s.SHX.reader.Peek(8)
+		if s.scanSHX != nil {
+			data, err := s.scanSHX.reader.Peek(8)
 			if err != nil {
 				errSHX = err
 				return
 			}
 			record := ParseSHXRecord(data)
 			offsetInit := record.Offset
-			nb, err := s.SHX.reader.Discard(n * 8)
+			nb, err := s.scanSHX.reader.Discard(n * 8)
 			if err != nil {
 				nSHX = nb / 8
 				errSHX = err
 				return
 			}
-			s.SHX.scanRecords += n
+			s.scanSHX.scanRecords += n
 
-			if s.SHP != nil {
-				data, err := s.SHX.reader.Peek(8)
+			if s.scanSHP != nil {
+				data, err := s.scanSHX.reader.Peek(8)
 				if err != nil {
 					errSHX = err
 					return
 				}
 				record := ParseSHXRecord(data)
 				offsetEnd := record.Offset
-				nb, err := s.SHP.reader.Discard(offsetEnd - offsetInit)
+				nb, err := s.scanSHP.reader.Discard(offsetEnd - offsetInit)
 				if err != nil {
 					nSHP = nb / record.ContentLength
 					errSHP = err
 					return
 				}
-				s.SHP.scanRecords += n
+				s.scanSHP.scanRecords += n
 			}
-		} else if s.SHP != nil {
+		} else if s.scanSHP != nil {
 			errSHP = fmt.Errorf("can't discard .shp file without .shx file")
 			return
 		}
@@ -704,6 +507,7 @@ func (s *Scanner) Discard(n int) (int, error) {
 
 	wg.Wait()
 	if err := errors.Join(errSHP, errDBF, errSHX); err != nil {
+		s.err = err
 		return max(nSHX, nDBF, nSHP), err
 	}
 
@@ -711,42 +515,74 @@ func (s *Scanner) Discard(n int) (int, error) {
 	return n, nil
 }
 
-// Close ...
 func (s *Scanner) Close() error {
 	var err error
-	if s.DBF != nil {
-		err = errors.Join(err, s.DBF.reader.Close())
+	if s.scanDBF != nil {
+		err = errors.Join(err, s.scanDBF.reader.Close())
 	}
-	if s.SHP != nil {
-		err = errors.Join(err, s.SHP.reader.Close())
+	if s.scanSHP != nil {
+		err = errors.Join(err, s.scanSHP.reader.Close())
 	}
-	if s.SHX != nil {
-		err = errors.Join(err, s.SHX.reader.Close())
+	if s.scanSHX != nil {
+		err = errors.Join(err, s.scanSHX.reader.Close())
 	}
 	return err
 }
 
-// Records ...
-func (s Scanner) Records() int64 {
+func (s Scanner) ScannedRecords() int64 {
 	return s.scanRecords
 }
 
-// EstimatedRecords ...
 func (s Scanner) EstimatedRecords() int64 {
 	return s.estimatedRecords
 }
 
-// FieldDescriptors ...
-func (s Scanner) FieldDescriptors() []*DBFFieldDescriptor {
-	return s.DBF.fieldDescriptors
+func (s *Scanner) DBFHeader() *DBFHeader {
+	if s.scanDBF != nil {
+		return s.scanDBF.header
+	}
+	return nil
 }
 
-// Error ...
+func (s *Scanner) DBFFieldDescriptors() []*DBFFieldDescriptor {
+	if s.scanDBF != nil {
+		return s.scanDBF.fieldDescriptors
+	}
+	return nil
+}
+
+func (s *Scanner) SHPHeader() *SHxHeader {
+	if s.scanSHP != nil {
+		return s.scanSHP.header
+	}
+	return nil
+}
+
+func (s *Scanner) SHxHeader() *SHxHeader {
+	if s.scanSHX != nil {
+		return s.scanSHX.header
+	}
+	return nil
+}
+
+func (s Scanner) Charset() string {
+	if s.fileCPG != nil {
+		return s.fileCPG.Charset
+	}
+	return ""
+}
+
+func (s Scanner) Projection() string {
+	if s.filePRJ != nil {
+		return s.filePRJ.Projection
+	}
+	return ""
+}
+
 func (s Scanner) Error() error {
 	return s.err
 }
 
-// ScannerSHP ...
 type ScannerSHP struct {
 	reader      bufioReadCloser
 	options     *ReadSHPOptions
@@ -755,7 +591,6 @@ type ScannerSHP struct {
 	err         error
 }
 
-// NewScannerSHP ...
 func NewScannerSHP(reader io.ReadCloser, size int64, options *ReadSHPOptions) (*ScannerSHP, error) {
 	header, err := readSHxHeader(reader, size)
 	if err != nil {
@@ -768,7 +603,6 @@ func NewScannerSHP(reader io.ReadCloser, size int64, options *ReadSHPOptions) (*
 	}, nil
 }
 
-// Scan ...
 func (s *ScannerSHP) Scan() (*SHPRecord, error) {
 	if s.err != nil {
 		return nil, s.err
@@ -791,7 +625,6 @@ func (s *ScannerSHP) Scan() (*SHPRecord, error) {
 	}
 }
 
-// ScannerSHX ...
 type ScannerSHX struct {
 	reader      bufioReadCloser
 	header      *SHxHeader
@@ -799,7 +632,6 @@ type ScannerSHX struct {
 	err         error
 }
 
-// NewScannerSHX ...
 func NewScannerSHX(reader io.ReadCloser, size int64) (*ScannerSHX, error) {
 	header, err := readSHxHeader(reader, size)
 	if err != nil {
@@ -811,7 +643,6 @@ func NewScannerSHX(reader io.ReadCloser, size int64) (*ScannerSHX, error) {
 	}, nil
 }
 
-// Scan ...
 func (s *ScannerSHX) Scan() (*SHXRecord, error) {
 	if s.err != nil {
 		return nil, s.err
@@ -819,6 +650,7 @@ func (s *ScannerSHX) Scan() (*SHXRecord, error) {
 
 	data := make([]byte, 8)
 	if err := readFull(s.reader, data); err != nil {
+		s.err = err
 		return nil, err
 	}
 	record := ParseSHXRecord(data)
@@ -826,10 +658,8 @@ func (s *ScannerSHX) Scan() (*SHXRecord, error) {
 	return &record, nil
 }
 
-// DBFRecord ...
 type DBFRecord = []any
 
-// ScannerDBF ...
 type ScannerDBF struct {
 	reader           bufioReadCloser
 	options          *ReadDBFOptions
@@ -840,7 +670,6 @@ type ScannerDBF struct {
 	err              error
 }
 
-// NewScannerDBF ...
 func NewScannerDBF(reader io.ReadCloser, options *ReadDBFOptions) (*ScannerDBF, error) {
 	headerData := make([]byte, dbfHeaderLength)
 	if err := readFull(reader, headerData); err != nil {
@@ -911,7 +740,6 @@ func NewScannerDBF(reader io.ReadCloser, options *ReadDBFOptions) (*ScannerDBF, 
 	}, nil
 }
 
-// Scan ...
 func (s *ScannerDBF) Scan() (DBFRecord, error) {
 	if s.err != nil {
 		return nil, s.err
@@ -944,4 +772,8 @@ func (s *ScannerDBF) Scan() (DBFRecord, error) {
 		s.err = fmt.Errorf("%d: invalid record flag", recordData[0])
 		return nil, s.err
 	}
+}
+
+func (s *ScannerDBF) FieldDescriptors() []*DBFFieldDescriptor {
+	return s.fieldDescriptors
 }

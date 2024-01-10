@@ -3,7 +3,6 @@ package shapefile
 import (
 	"math"
 	"path"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,11 +16,12 @@ func TestReadScanner(t *testing.T) {
 		basename           string
 		hasDBF             bool
 		hasPRJ             bool
+		hasCPG             bool
 		hasSHX             bool
 		expectedErr        string
 		expectedShapeType  ShapeType
 		expectedBounds     *geom.Bounds
-		expectedNumRecords int64
+		expectedNumRecords int
 		expectedGeom0      geom.T
 		expectedDBFRecord0 []any
 		expectedExport     any
@@ -146,37 +146,40 @@ func TestReadScanner(t *testing.T) {
 			}
 
 			t.Run("Read", func(t *testing.T) {
-				shapefile, err := ReadScannerBasename(path.Join("testdata", tc.basename), nil)
+				scanner, err := NewScannerFromBasename(path.Join("testdata", tc.basename), nil)
+				require.NoError(t, err)
+				require.NotNil(t, scanner)
+				shapefile, err := ReadScanner(scanner)
 				require.NoError(t, err)
 				require.NotNil(t, shapefile)
 
-				exporter, err := NewExporter(reflect.TypeOf(tc.expectedExport), "geom", shapefile.FieldDescriptors)
-				if tc.expectedExport != nil {
-					require.NoError(t, err)
-					require.NotNil(t, exporter)
-				}
-				assert.Equal(t, tc.expectedShapeType, shapefile.SHxHeader.ShapeType)
-				assert.Equal(t, tc.expectedBounds, shapefile.SHxHeader.Bounds)
-				assert.Equal(t, tc.expectedNumRecords, shapefile.NumRecords)
-				assert.Equal(t, tc.expectedGeom0, shapefile.Records[0].SPH.Geom)
+				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.SHxHeader.ShapeType)
+				assert.Equal(t, tc.expectedBounds, shapefile.SHP.SHxHeader.Bounds)
+				assert.Equal(t, tc.expectedNumRecords, shapefile.NumRecords())
+				assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
 
 				if tc.hasDBF {
-					assert.Equal(t, shapefile.NumRecords, tc.expectedNumRecords)
-					assert.Equal(t, tc.expectedDBFRecord0, *shapefile.Records[0].DBF)
+					assert.Equal(t, shapefile.NumRecords(), tc.expectedNumRecords)
+					assert.Equal(t, tc.expectedDBFRecord0, shapefile.DBF.Records[0])
 				} else {
-					assert.Nil(t, shapefile.DBFHeader)
+					assert.Nil(t, shapefile.DBF)
 				}
 
 				if tc.hasPRJ {
-					assert.NotNil(t, shapefile.Projection)
+					assert.NotNil(t, shapefile.PRJ.Projection)
 				} else {
-					assert.Nil(t, shapefile.Projection)
+					assert.Nil(t, shapefile.PRJ)
+				}
+				if tc.hasCPG {
+					assert.NotNil(t, shapefile.CPG.Charset)
+				} else {
+					assert.Nil(t, shapefile.CPG)
 				}
 
 				if tc.hasSHX {
-					assert.Equal(t, tc.expectedShapeType, shapefile.SHxHeader.ShapeType)
-					assert.Equal(t, tc.expectedBounds, shapefile.SHxHeader.Bounds)
-					assert.Equal(t, shapefile.NumRecords, tc.expectedNumRecords)
+					assert.Equal(t, tc.expectedShapeType, shapefile.SHP.SHxHeader.ShapeType)
+					assert.Equal(t, tc.expectedBounds, shapefile.SHP.SHxHeader.Bounds)
+					assert.Equal(t, shapefile.NumRecords(), tc.expectedNumRecords)
 				}
 			})
 		})
@@ -189,7 +192,7 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 		basename                 string
 		expectedShapeType        ShapeType
 		expectedBounds           *geom.Bounds
-		expectedRecordsLen       int64
+		expectedRecordsLen       int
 		expectedDBFRecord0Fields map[string]any
 		expectedSHPRecord0       *SHPRecord
 		expectedExport           any
@@ -353,19 +356,12 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 		},
 	} {
 		t.Run(tc.filename, func(t *testing.T) {
-			testShapefile := func(t *testing.T, shapefile *ScanShapefile) {
+			testShapefile := func(t *testing.T, shapefile *Shapefile) {
 				t.Helper()
-				assert.Equal(t, tc.expectedShapeType, shapefile.SHxHeader.ShapeType)
-				assert.Equal(t, tc.expectedBounds, shapefile.SHxHeader.Bounds)
+				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.SHxHeader.ShapeType)
+				assert.Equal(t, tc.expectedBounds, shapefile.SHP.SHxHeader.Bounds)
 
-				exporter, err := NewExporter(reflect.TypeOf(tc.expectedExport), "geom", shapefile.FieldDescriptors)
-				if tc.expectedExport != nil {
-					require.NoError(t, err)
-					require.NotNil(t, exporter)
-					assert.Equal(t, tc.expectedExport, shapefile.Records[0].Export(exporter))
-				}
-
-				assert.Equal(t, shapefile.NumRecords, tc.expectedRecordsLen)
+				assert.Equal(t, shapefile.NumRecords(), tc.expectedRecordsLen)
 				if tc.expectedDBFRecord0Fields != nil {
 					fields, geom := shapefile.Record(0)
 					assert.Equal(t, tc.expectedDBFRecord0Fields, fields)
@@ -374,9 +370,9 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 					}
 				}
 
-				assert.Equal(t, shapefile.NumRecords, tc.expectedRecordsLen)
+				assert.Equal(t, shapefile.NumRecords(), tc.expectedRecordsLen)
 				if tc.expectedSHPRecord0 != nil {
-					shpRecord0 := shapefile.Records[0].SPH
+					shpRecord0 := shapefile.SHP.Records[0]
 					assert.Equal(t, tc.expectedSHPRecord0.Number, shpRecord0.Number)
 					assert.Equal(t, tc.expectedSHPRecord0.ContentLength, shpRecord0.ContentLength)
 					assert.Equal(t, tc.expectedSHPRecord0.ShapeType, shpRecord0.ShapeType)
@@ -385,12 +381,16 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 					}
 				}
 
-				assert.Equal(t, shapefile.NumRecords, tc.expectedRecordsLen)
+				assert.Equal(t, shapefile.NumRecords(), tc.expectedRecordsLen)
 			}
 
 			t.Run("ReadZipFile", func(t *testing.T) {
-				shapefile, err := ReadScannerZipFile(tc.filename, nil)
+				scanner, err := NewScannerFromZipFile(tc.filename, nil)
 				require.NoError(t, err)
+				assert.NotNil(t, scanner)
+				shapefile, err := ReadScanner(scanner)
+				require.NoError(t, err)
+				assert.NotNil(t, scanner)
 				testShapefile(t, shapefile)
 			})
 		})
