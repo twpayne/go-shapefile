@@ -5,11 +5,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/alecthomas/assert/v2"
 )
 
 func FuzzReadSHP(f *testing.F) {
-	require.NoError(f, addFuzzDataFromFS(f, os.DirFS("."), "testdata", ".shp"))
+	assert.NoError(f, addFuzzDataFromFS(f, os.DirFS("."), "testdata", ".shp"))
 
 	f.Fuzz(func(_ *testing.T, data []byte) {
 		r := bytes.NewReader(data)
