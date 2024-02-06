@@ -5,8 +5,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/alecthomas/assert/v2"
 	"github.com/twpayne/go-geom"
 )
 
@@ -147,11 +146,11 @@ func TestReadScanner(t *testing.T) {
 
 			t.Run("Read", func(t *testing.T) {
 				scanner, err := NewScannerFromBasename(path.Join("testdata", tc.basename), nil)
-				require.NoError(t, err)
-				require.NotNil(t, scanner)
+				assert.NoError(t, err)
+				assert.NotZero(t, scanner)
 				shapefile, err := ReadScanner(scanner)
-				require.NoError(t, err)
-				require.NotNil(t, shapefile)
+				assert.NoError(t, err)
+				assert.NotZero(t, shapefile)
 
 				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.SHxHeader.ShapeType)
 				assert.Equal(t, tc.expectedBounds, shapefile.SHP.SHxHeader.Bounds)
@@ -162,18 +161,18 @@ func TestReadScanner(t *testing.T) {
 					assert.Equal(t, shapefile.NumRecords(), tc.expectedNumRecords)
 					assert.Equal(t, tc.expectedDBFRecord0, shapefile.DBF.Records[0])
 				} else {
-					assert.Nil(t, shapefile.DBF)
+					assert.Zero(t, shapefile.DBF)
 				}
 
 				if tc.hasPRJ {
-					assert.NotNil(t, shapefile.PRJ.Projection)
+					assert.NotZero(t, shapefile.PRJ.Projection)
 				} else {
-					assert.Nil(t, shapefile.PRJ)
+					assert.Zero(t, shapefile.PRJ)
 				}
 				if tc.hasCPG {
-					assert.NotNil(t, shapefile.CPG.Charset)
+					assert.NotZero(t, shapefile.CPG.Charset)
 				} else {
-					assert.Nil(t, shapefile.CPG)
+					assert.Zero(t, shapefile.CPG)
 				}
 
 				if tc.hasSHX {
@@ -386,11 +385,11 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 
 			t.Run("ReadZipFile", func(t *testing.T) {
 				scanner, err := NewScannerFromZipFile(tc.filename, nil)
-				require.NoError(t, err)
-				assert.NotNil(t, scanner)
+				assert.NoError(t, err)
+				assert.NotZero(t, scanner)
 				shapefile, err := ReadScanner(scanner)
-				require.NoError(t, err)
-				assert.NotNil(t, scanner)
+				assert.NoError(t, err)
+				assert.NotZero(t, scanner)
 				testShapefile(t, shapefile)
 			})
 		})

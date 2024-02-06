@@ -9,8 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/alecthomas/assert/v2"
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/wkt"
 )
@@ -139,8 +138,8 @@ func TestReadFS(t *testing.T) {
 
 			t.Run("Read", func(t *testing.T) {
 				shapefile, err := Read(filepath.Join("testdata", tc.basename), nil)
-				require.NoError(t, err)
-				require.NotNil(t, shapefile)
+				assert.NoError(t, err)
+				assert.NotZero(t, shapefile)
 
 				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
 				assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
@@ -148,33 +147,33 @@ func TestReadFS(t *testing.T) {
 				assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
 
 				if tc.hasDBF {
-					assert.Len(t, shapefile.DBF.Records, tc.expectedNumRecords)
+					assert.Equal(t, tc.expectedNumRecords, len(shapefile.DBF.Records))
 					assert.Equal(t, tc.expectedDBFRecord0, shapefile.DBF.Records[0])
 				} else {
-					assert.Nil(t, shapefile.DBF)
+					assert.Zero(t, shapefile.DBF)
 				}
 
 				if tc.hasPRJ {
-					assert.NotNil(t, shapefile.PRJ)
+					assert.NotZero(t, shapefile.PRJ)
 				} else {
-					assert.Nil(t, shapefile.PRJ)
+					assert.Zero(t, shapefile.PRJ)
 				}
 
 				if tc.hasSHX {
 					assert.Equal(t, tc.expectedShapeType, shapefile.SHX.ShapeType)
 					assert.Equal(t, tc.expectedBounds, shapefile.SHX.Bounds)
-					assert.Len(t, shapefile.SHX.Records, tc.expectedNumRecords)
+					assert.Equal(t, tc.expectedNumRecords, len(shapefile.SHX.Records))
 				} else {
-					assert.Nil(t, shapefile.SHX)
+					assert.Zero(t, shapefile.SHX)
 				}
 			})
 
 			t.Run("ReadFS", func(t *testing.T) {
 				shapefile, err := ReadFS(os.DirFS("testdata"), tc.basename, nil)
 				if tc.expectedErr != "" {
-					require.Error(t, err, tc.expectedErr)
+					assert.Error(t, err, tc.expectedErr)
 				}
-				require.NoError(t, err)
+				assert.NoError(t, err)
 
 				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
 				assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
@@ -182,24 +181,24 @@ func TestReadFS(t *testing.T) {
 				assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
 
 				if tc.hasDBF {
-					assert.Len(t, shapefile.DBF.Records, tc.expectedNumRecords)
+					assert.Equal(t, tc.expectedNumRecords, len(shapefile.DBF.Records))
 					assert.Equal(t, tc.expectedDBFRecord0, shapefile.DBF.Records[0])
 				} else {
-					assert.Nil(t, shapefile.DBF)
+					assert.Zero(t, shapefile.DBF)
 				}
 
 				if tc.hasPRJ {
-					assert.NotNil(t, shapefile.PRJ)
+					assert.NotZero(t, shapefile.PRJ)
 				} else {
-					assert.Nil(t, shapefile.PRJ)
+					assert.Zero(t, shapefile.PRJ)
 				}
 
 				if tc.hasSHX {
 					assert.Equal(t, tc.expectedShapeType, shapefile.SHX.ShapeType)
 					assert.Equal(t, tc.expectedBounds, shapefile.SHX.Bounds)
-					assert.Len(t, shapefile.SHX.Records, tc.expectedNumRecords)
+					assert.Equal(t, tc.expectedNumRecords, len(shapefile.SHX.Records))
 				} else {
-					assert.Nil(t, shapefile.SHX)
+					assert.Zero(t, shapefile.SHX)
 				}
 			})
 		})
@@ -337,7 +336,7 @@ func TestReadFSAndZipFile(t *testing.T) {
 				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
 				assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
 
-				assert.Len(t, shapefile.DBF.Records, tc.expectedRecordsLen)
+				assert.Equal(t, tc.expectedRecordsLen, len(shapefile.DBF.Records))
 				if tc.expectedDBFRecord0Fields != nil {
 					fields, geom := shapefile.Record(0)
 					assert.Equal(t, tc.expectedDBFRecord0Fields, fields)
@@ -346,7 +345,7 @@ func TestReadFSAndZipFile(t *testing.T) {
 					}
 				}
 
-				assert.Len(t, shapefile.SHP.Records, tc.expectedRecordsLen)
+				assert.Equal(t, tc.expectedRecordsLen, len(shapefile.SHP.Records))
 				if tc.expectedSHPRecord0 != nil {
 					shpRecord0 := shapefile.SHP.Records[0]
 					assert.Equal(t, tc.expectedSHPRecord0.Number, shpRecord0.Number)
@@ -357,29 +356,29 @@ func TestReadFSAndZipFile(t *testing.T) {
 					}
 				}
 
-				assert.Len(t, shapefile.SHX.Records, tc.expectedRecordsLen)
+				assert.Equal(t, tc.expectedRecordsLen, len(shapefile.SHX.Records))
 			}
 
 			t.Run("ReadFS", func(t *testing.T) {
 				file, err := os.Open(tc.filename)
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				defer file.Close()
 
 				fileInfo, err := file.Stat()
-				require.NoError(t, err)
+				assert.NoError(t, err)
 
 				zipReader, err := zip.NewReader(file, fileInfo.Size())
-				require.NoError(t, err)
+				assert.NoError(t, err)
 
 				shapefile, err := ReadFS(zipReader, tc.basename, nil)
-				require.NoError(t, err)
+				assert.NoError(t, err)
 
 				testShapefile(t, shapefile)
 			})
 
 			t.Run("ReadZipFile", func(t *testing.T) {
 				shapefile, err := ReadZipFile(tc.filename, nil)
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				testShapefile(t, shapefile)
 			})
 		})
@@ -439,6 +438,6 @@ func addFuzzDataFromFS(f *testing.F, fsys fs.FS, root, ext string) error {
 func newGeomFromWKT(t *testing.T, wktStr string) geom.T {
 	t.Helper()
 	g, err := wkt.Unmarshal(wktStr)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	return g
 }
