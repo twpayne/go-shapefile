@@ -1,6 +1,3 @@
-// Package shapefile reads ESRI Shapefiles.
-//
-// See https://support.esri.com/en/white-paper/279.
 package shapefile
 
 // FIXME provide lazy, random access to individual records, using SHX

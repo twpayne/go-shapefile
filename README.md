@@ -1,8 +1,16 @@
 # go-shapefile
 
-[![GoDoc](https://godoc.org/github.com/twpayne/go-shapefile?status.svg)](https://godoc.org/github.com/twpayne/go-shapefile)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/twpayne/go-shapefile)](https://pkg.go.dev/github.com/twpayne/go-shapefile)
 
 Package go-shapefile provides a native Go reader for ESRI Shapefiles.
+
+## Features
+
+* Reads `.CPG`, `.DBF`, `.PRJ`, `.SHP`, and `.SHX` files.
+* Protection against malicious and malformed files.
+* Scanner interface for random access.
+* Uses [`github.com/twpayne/go-geom`](https://github.com/twpayne/go-geom).
+* Well tested.
 
 ## License
 
