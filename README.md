@@ -2,7 +2,7 @@
 
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/twpayne/go-shapefile)](https://pkg.go.dev/github.com/twpayne/go-shapefile)
 
-Package go-shapefile provides a native Go reader for ESRI Shapefiles.
+Package shapefile provides a native Go reader for ESRI Shapefiles.
 
 ## Features
 
