@@ -196,6 +196,9 @@ func NewScannerFromZipReader(zipReader *zip.Reader, options *ReadShapefileOption
 	var shxFiles []*zip.File
 	var shpFiles []*zip.File
 	for _, zipFile := range zipReader.File {
+		if isMacOSXPath(zipFile.Name) {
+			continue
+		}
 		switch strings.ToLower(path.Ext(zipFile.Name)) {
 		case ".dbf":
 			dbfFiles = append(dbfFiles, zipFile)
