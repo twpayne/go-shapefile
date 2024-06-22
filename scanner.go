@@ -500,7 +500,7 @@ func (s *Scanner) Discard(n int) (int, error) {
 				s.scanSHP.scanRecords += n
 			}
 		} else if s.scanSHP != nil {
-			errSHP = fmt.Errorf("can't discard .shp file without .shx file")
+			errSHP = errors.New("can't discard .shp file without .shx file")
 			return
 		}
 	}()
@@ -717,7 +717,7 @@ func NewScannerDBF(reader io.ReadCloser, options *ReadDBFOptions) (*ScannerDBF, 
 		totalLength += fieldDescriptor.Length
 	}
 	if totalLength+1 != header.RecordSize {
-		return nil, fmt.Errorf("invalid total length of fields")
+		return nil, errors.New("invalid total length of fields")
 	}
 
 	var decoder *encoding.Decoder
