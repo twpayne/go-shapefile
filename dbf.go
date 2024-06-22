@@ -309,7 +309,7 @@ func TrimTrailingZeros(data []byte) []byte {
 
 func parseCharacter(data []byte, decoder *encoding.Decoder) (string, error) {
 	if decoder == nil {
-		return "", fmt.Errorf("decoder is nil")
+		return "", errors.New("decoder is nil")
 	}
 	return decoder.String(string(bytes.TrimSpace(TrimTrailingZeros(data))))
 }
