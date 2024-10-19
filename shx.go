@@ -33,7 +33,7 @@ func ReadSHX(r io.Reader, size int64) (*SHX, error) {
 
 	n := int((size - headerSize) / 8)
 	records := make([]SHXRecord, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		record := ParseSHXRecord(data[8*i : 8*i+8])
 		records = append(records, record)
 	}
