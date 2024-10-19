@@ -199,7 +199,11 @@ func ReadSHPRecord(r io.Reader, options *ReadSHPOptions) (*SHPRecord, error) {
 	case ShapeTypePolyLine, ShapeTypePolyLineM, ShapeTypePolyLineZ:
 		g = geom.NewMultiLineStringFlat(layout, flatCoords, ends)
 	case ShapeTypePolygon, ShapeTypePolygonM, ShapeTypePolygonZ:
-		g = geom.NewPolygonFlat(layout, flatCoords, ends)
+		endss, err := makeMultiPolygonEndss(layout, flatCoords, ends)
+		if err != nil {
+			return nil, err
+		}
+		g = geom.NewMultiPolygonFlat(layout, flatCoords, endss)
 	}
 
 	return &SHPRecord{
@@ -228,4 +232,61 @@ func ReadSHPZipFile(zipFile *zip.File, options *ReadSHPOptions) (*SHP, error) {
 // Record returns the ith geometry.
 func (s *SHP) Record(i int) geom.T {
 	return s.Records[i].Geom
+}
+
+// makeMultiPolygonEndss returns the multipolygon endss by inspecting the
+// orientation of the rings defined by flatCoords and ends. Each clockwise ring
+// defines the outer ring of a new polygon, and each anti-clockwise ring defines
+// an inner ring of the current polygon.
+//
+// All rings are assumed to be in order, that is that inner rings always belong
+// to the polygon with the most recently defined outer ring.
+//
+// From the Shapefile specification:
+//
+// A polygon consists of one or more rings. A ring is a connected sequence of
+// four or more points that form a closed, non-self-intersecting loop. A polygon
+// may contain multiple outer rings. The order of vertices or orientation for a
+// ring indicates which side of the ring is the interior of the polygon. The
+// neighborhood to the right of an observer walking along the ring in vertex
+// order is the neighborhood inside the polygon. Vertices of rings defining
+// holes in polygons are in a counterclockwise direction. Vertices for a single,
+// ringed polygon are, therefore, always in clockwise order. The rings of a
+// polygon are referred to as its parts.
+//
+// Because this specification does not forbid consecutive points with identical
+// coordinates, shapefile readers must handle such cases. On the other hand, the
+// degenerate, zero length or zero area parts that might result are not allowed.
+func makeMultiPolygonEndss(layout geom.Layout, flatCoords []float64, ends []int) ([][]int, error) {
+	var endss [][]int
+	polygonOffset := 0
+	offset := 0
+	stride := layout.Stride()
+	for i, end := range ends {
+		if (end-offset)/stride < 4 {
+			return nil, errors.New("too few points in ring")
+		}
+		switch doubleArea := doubleArea(flatCoords, offset, end, stride); {
+		case doubleArea == 0:
+			return nil, errors.New("zero area ring")
+		case i != 0 && doubleArea < 0:
+			endss = append(endss, ends[polygonOffset:i])
+			polygonOffset = i
+		}
+		offset = end
+	}
+	if len(ends) > 0 {
+		endss = append(endss, ends[polygonOffset:])
+	}
+	return endss, nil
+}
+
+// doubleArea returns double the area of the polygon from offset to end in
+// flatCoords.
+func doubleArea(flatCoords []float64, offset, end, stride int) float64 {
+	var doubleArea float64
+	for i := offset + stride; i < end; i += stride {
+		doubleArea += (flatCoords[i+1] - flatCoords[i+1-stride]) * (flatCoords[i] + flatCoords[i-stride])
+	}
+	return doubleArea
 }
