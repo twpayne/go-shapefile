@@ -157,7 +157,7 @@ func ReadDBF(r io.Reader, _ int64, options *ReadDBFOptions) (*DBF, error) {
 		decoder = charmap.ISO8859_1.NewDecoder()
 	}
 	records := make([][]any, 0, header.Records)
-	for i := 0; i < header.Records; i++ {
+	for range header.Records {
 		recordData := make([]byte, header.RecordSize)
 		if err := readFull(r, recordData); err != nil {
 			return nil, err

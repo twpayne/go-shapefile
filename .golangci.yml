@@ -1,5 +1,5 @@
 run:
-  go: '1.21'
+  go: '1.22'
 
 linters:
   enable:
@@ -10,6 +10,7 @@ linters:
   - canonicalheader
   - containedctx
   - contextcheck
+  - copyloopvar
   - decorder
   - dogsled
   - dupl
@@ -47,6 +48,7 @@ linters:
   - inamedparam
   - ineffassign
   - interfacebloat
+  - intrange
   - ireturn
   - lll
   - loggercheck
@@ -86,7 +88,6 @@ linters:
   - whitespace
   - zerologlint
   disable:
-  - copyloopvar
   - cyclop
   - depguard
   - exhaustive
@@ -97,7 +98,6 @@ linters:
   - gocyclo
   - godox
   - gomnd
-  - intrange
   - maintidx
   - nakedret
   - nestif

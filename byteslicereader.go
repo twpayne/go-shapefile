@@ -76,7 +76,7 @@ func (r *byteSliceReader) readFloat64s(n int) []float64 {
 		return nil
 	}
 	float64s := make([]float64, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		float64s = append(float64s, math.Float64frombits(binary.LittleEndian.Uint64(r.rest[8*i:8*i+8])))
 	}
 	r.rest = r.rest[8*n:]
@@ -92,7 +92,7 @@ func (r *byteSliceReader) readOrdinates(flatCoords []float64, n int, layout geom
 		return
 	}
 	stride := layout.Stride()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		flatCoords[i*stride+index] = math.Float64frombits(binary.LittleEndian.Uint64(r.rest[8*i : 8*i+8]))
 	}
 	r.rest = r.rest[8*n:]
@@ -120,7 +120,7 @@ func (r *byteSliceReader) readXYs(flatCoords []float64, n int, layout geom.Layou
 		return
 	}
 	stride := layout.Stride()
-	for i := 0; i < n; i++ {
+	for i := range n {
 		flatCoords[i*stride] = math.Float64frombits(binary.LittleEndian.Uint64(r.rest[16*i : 16*i+8]))
 		flatCoords[i*stride+1] = math.Float64frombits(binary.LittleEndian.Uint64(r.rest[16*i+8 : 16*i+16]))
 	}
