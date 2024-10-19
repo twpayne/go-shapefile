@@ -3,9 +3,11 @@ run:
 
 linters:
   enable:
+  - asasalint
   - asciicheck
   - bidichk
   - bodyclose
+  - canonicalheader
   - containedctx
   - contextcheck
   - decorder
@@ -18,18 +20,22 @@ linters:
   - errchkjson
   - errname
   - errorlint
-  - exportloopref
+  - fatcontext
   - forbidigo
   - forcetypeassert
   - gci
   - ginkgolinter
   - gocheckcompilerdirectives
+  - gochecknoinits
   - gochecksumtype
+  - goconst
   - gocritic
   - godot
   - gofmt
   - gofumpt
+  - goheader
   - goimports
+  - gomoddirectives
   - gomodguard
   - goprintffuncname
   - gosec
@@ -41,6 +47,7 @@ linters:
   - inamedparam
   - ineffassign
   - interfacebloat
+  - ireturn
   - lll
   - loggercheck
   - makezero
@@ -59,6 +66,8 @@ linters:
   - reassign
   - revive
   - rowserrcheck
+  - sloglint
+  - spancheck
   - sqlclosecheck
   - staticcheck
   - stylecheck
@@ -77,22 +86,18 @@ linters:
   - whitespace
   - zerologlint
   disable:
-  - asasalint
+  - copyloopvar
   - cyclop
   - depguard
   - exhaustive
   - exhaustruct
   - funlen
   - gochecknoglobals
-  - gochecknoinits
   - gocognit
-  - goconst
   - gocyclo
   - godox
-  - goheader
   - gomnd
-  - gomoddirectives
-  - ireturn
+  - intrange
   - maintidx
   - nakedret
   - nestif
@@ -122,8 +127,12 @@ linters-settings:
     module-path: github.com/twpayne/go-shapefile
   goimports:
     local-prefixes: github.com/twpayne/go-shapefile
+  gosec:
+    excludes:
+    - G115
   ireturn:
     allow:
+    - empty
     - error
     - github\.com/twpayne/go-geom\.T
     - stdlib
