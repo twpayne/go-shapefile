@@ -529,11 +529,11 @@ func (s *Scanner) Close() error {
 	return err
 }
 
-func (s Scanner) ScannedRecords() int64 {
+func (s *Scanner) ScannedRecords() int64 {
 	return s.scanRecords
 }
 
-func (s Scanner) EstimatedRecords() int64 {
+func (s *Scanner) EstimatedRecords() int64 {
 	return s.estimatedRecords
 }
 
@@ -565,21 +565,21 @@ func (s *Scanner) SHxHeader() *SHxHeader {
 	return nil
 }
 
-func (s Scanner) Charset() string {
+func (s *Scanner) Charset() string {
 	if s.fileCPG != nil {
 		return s.fileCPG.Charset
 	}
 	return ""
 }
 
-func (s Scanner) Projection() string {
+func (s *Scanner) Projection() string {
 	if s.filePRJ != nil {
 		return s.filePRJ.Projection
 	}
 	return ""
 }
 
-func (s Scanner) Error() error {
+func (s *Scanner) Error() error {
 	return s.err
 }
 

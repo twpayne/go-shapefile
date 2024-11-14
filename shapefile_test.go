@@ -388,8 +388,8 @@ func TestReadFSAndZipFile(t *testing.T) {
 func TestShapefileRecords(t *testing.T) {
 	s, err := ReadZipFile("testdata/110m-admin-0-countries.zip", nil)
 	assert.NoError(t, err)
-	var fieldss []map[string]any
-	var geoms []geom.T
+	fieldss := make([]map[string]any, 0, s.NumRecords())
+	geoms := make([]geom.T, 0, s.NumRecords())
 	for fields, g := range s.Records() {
 		fieldss = append(fieldss, fields)
 		geoms = append(geoms, g)

@@ -1,5 +1,5 @@
 run:
-  go: '1.22'
+  go: '1.23'
 
 linters:
   enable:
@@ -44,6 +44,7 @@ linters:
   - gosmopolitan
   - govet
   - grouper
+  - iface
   - importas
   - inamedparam
   - ineffassign
@@ -66,6 +67,7 @@ linters:
   - promlinter
   - protogetter
   - reassign
+  - recvcheck
   - revive
   - rowserrcheck
   - sloglint
@@ -97,7 +99,6 @@ linters:
   - gocognit
   - gocyclo
   - godox
-  - gomnd
   - maintidx
   - nakedret
   - nestif
