@@ -5,8 +5,8 @@ go 1.23
 require (
 	github.com/alecthomas/assert/v2 v2.10.0
 	github.com/twpayne/go-geom v1.5.7
-	golang.org/x/net v0.30.0
-	golang.org/x/text v0.19.0
+	golang.org/x/net v0.31.0
+	golang.org/x/text v0.20.0
 )
 
 require (
