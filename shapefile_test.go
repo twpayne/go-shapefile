@@ -385,6 +385,19 @@ func TestReadFSAndZipFile(t *testing.T) {
 	}
 }
 
+func TestShapefileRecords(t *testing.T) {
+	s, err := ReadZipFile("testdata/110m-admin-0-countries.zip", nil)
+	assert.NoError(t, err)
+	var fieldss []map[string]any
+	var geoms []geom.T
+	for fields, g := range s.Records() {
+		fieldss = append(fieldss, fields)
+		geoms = append(geoms, g)
+	}
+	assert.Equal(t, 177, len(fieldss))
+	assert.Equal(t, 177, len(geoms))
+}
+
 func addFuzzDataFromFS(f *testing.F, fsys fs.FS, root, ext string) error {
 	f.Helper()
 	return fs.WalkDir(fsys, root, func(path string, _ fs.DirEntry, err error) error {

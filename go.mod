@@ -1,6 +1,6 @@
 module github.com/twpayne/go-shapefile
 
-go 1.22
+go 1.23
 
 require (
 	github.com/alecthomas/assert/v2 v2.10.0

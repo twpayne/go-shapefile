@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"iter"
 	"os"
 	"path/filepath"
 	"strings"
@@ -492,6 +493,18 @@ func (s *Shapefile) Record(i int) (map[string]any, geom.T) {
 		g = s.SHP.Record(i)
 	}
 	return fields, g
+}
+
+// Records returns an iterator over all fields and geometries in s.
+func (s *Shapefile) Records() iter.Seq2[map[string]any, geom.T] {
+	return func(yield func(map[string]any, geom.T) bool) {
+		for i := range s.NumRecords() {
+			fields, g := s.Record(i)
+			if !yield(fields, g) {
+				return
+			}
+		}
+	}
 }
 
 func openWithSize(name string) (*os.File, int64, error) {
