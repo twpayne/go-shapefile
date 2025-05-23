@@ -758,11 +758,7 @@ func (s *ScannerDBF) Scan() (DBFRecord, error) {
 			fieldData := recordData[offset : offset+fieldDescriptor.Length]
 			offset += fieldDescriptor.Length
 			field, err := fieldDescriptor.ParseRecord(fieldData, s.decoder)
-			if s.options.SkipBrokenFields {
-				field = nil
-				err = nil
-			}
-			if err != nil {
+			if err != nil && !s.options.SkipBrokenFields {
 				s.err = fmt.Errorf("field %s: %w", fieldDescriptor.Name, err)
 				return nil, s.err
 			}
