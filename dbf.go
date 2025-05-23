@@ -171,11 +171,7 @@ func ReadDBF(r io.Reader, _ int64, options *ReadDBFOptions) (*DBF, error) {
 				fieldData := recordData[offset : offset+fieldDescriptor.Length]
 				offset += fieldDescriptor.Length
 				field, err := fieldDescriptor.ParseRecord(fieldData, decoder)
-				if options.SkipBrokenFields && err != nil {
-					field = nil
-					err = nil
-				}
-				if err != nil {
+				if err != nil && !options.SkipBrokenFields {
 					return nil, fmt.Errorf("field %s: %w", fieldDescriptor.Name, err)
 				}
 				record = append(record, field)

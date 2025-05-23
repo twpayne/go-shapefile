@@ -386,16 +386,50 @@ func TestReadFSAndZipFile(t *testing.T) {
 }
 
 func TestShapefileRecords(t *testing.T) {
-	s, err := ReadZipFile("testdata/110m-admin-0-countries.zip", nil)
-	assert.NoError(t, err)
-	fieldss := make([]map[string]any, 0, s.NumRecords())
-	geoms := make([]geom.T, 0, s.NumRecords())
-	for fields, g := range s.Records() {
-		fieldss = append(fieldss, fields)
-		geoms = append(geoms, g)
+	for _, tc := range []struct {
+		filename           string
+		expectedRecordsLen int
+		expectedGeomsLen   int
+		expectedErr        string
+		ReadDBFOptions     *ReadDBFOptions
+	}{
+		{
+			filename:           "testdata/110m-admin-0-countries.zip",
+			expectedRecordsLen: 177,
+			expectedGeomsLen:   177,
+		},
+		{
+			filename:    "testdata/10m_populated_places_simple.zip",
+			expectedErr: "failed to parse DBF field",
+		},
+		{
+			filename:           "testdata/10m_populated_places_simple.zip",
+			expectedRecordsLen: 7342,
+			expectedGeomsLen:   7342,
+			ReadDBFOptions: &ReadDBFOptions{
+				SkipBrokenFields: true,
+			},
+		},
+	} {
+		t.Run(tc.filename, func(t *testing.T) {
+			s, err := ReadZipFile(tc.filename, &ReadShapefileOptions{
+				DBF: tc.ReadDBFOptions,
+			})
+			if tc.expectedErr != "" {
+				assert.Error(t, err, tc.expectedErr)
+				return
+			}
+			assert.NoError(t, err)
+			fieldss := make([]map[string]any, 0, s.NumRecords())
+			geoms := make([]geom.T, 0, s.NumRecords())
+			for fields, g := range s.Records() {
+				fieldss = append(fieldss, fields)
+				geoms = append(geoms, g)
+			}
+			assert.Equal(t, tc.expectedRecordsLen, len(fieldss))
+			assert.Equal(t, tc.expectedGeomsLen, len(geoms))
+		})
 	}
-	assert.Equal(t, 177, len(fieldss))
-	assert.Equal(t, 177, len(geoms))
 }
 
 func addFuzzDataFromFS(f *testing.F, fsys fs.FS, root, ext string) error {

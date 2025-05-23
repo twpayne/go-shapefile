@@ -189,12 +189,14 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 	for _, tc := range []struct {
 		filename                 string
 		basename                 string
+		options                  *ReadShapefileOptions
 		expectedShapeType        ShapeType
 		expectedBounds           *geom.Bounds
 		expectedRecordsLen       int
 		expectedDBFRecord0Fields map[string]any
 		expectedSHPRecord0       *SHPRecord
 		expectedExport           any
+		expectedErr              string
 	}{
 		{
 			filename:          "testdata/110m-admin-0-countries.zip",
@@ -241,6 +243,23 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 				ContentLength: 1152,
 				ShapeType:     ShapeTypePolygon,
 			},
+		},
+		{
+			filename:           "testdata/10m_populated_places_simple.zip",
+			expectedRecordsLen: 177,
+			expectedErr:        `scanning DBF: field labelrank: "**": invalid numeric: strconv.ParseInt: parsing "**": invalid syntax`,
+		},
+		{
+			filename: "testdata/10m_populated_places_simple.zip",
+			options: &ReadShapefileOptions{
+				DBF: &ReadDBFOptions{SkipBrokenFields: true},
+			},
+			expectedShapeType:  ShapeTypePoint,
+			expectedRecordsLen: 7342,
+			expectedBounds: geom.NewBounds(geom.XY).Set(
+				-179.5899789, -89.9999998,
+				179.3833036, 82.4833232,
+			),
 		},
 		{
 			filename:          "testdata/Luftfahrthindernisse.zip",
@@ -384,10 +403,14 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 			}
 
 			t.Run("ReadZipFile", func(t *testing.T) {
-				scanner, err := NewScannerFromZipFile(tc.filename, nil)
+				scanner, err := NewScannerFromZipFile(tc.filename, tc.options)
 				assert.NoError(t, err)
 				assert.NotZero(t, scanner)
 				shapefile, err := ReadScanner(scanner)
+				if tc.expectedErr != "" {
+					assert.Error(t, err)
+					return
+				}
 				assert.NoError(t, err)
 				assert.NotZero(t, scanner)
 				testShapefile(t, shapefile)
