@@ -83,10 +83,11 @@ type DBF struct {
 
 // ReadDBFOptions are options to ReadDBF.
 type ReadDBFOptions struct {
-	MaxHeaderSize int
-	MaxRecordSize int
-	MaxRecords    int
-	Charset       string
+	MaxHeaderSize    int
+	MaxRecordSize    int
+	MaxRecords       int
+	SkipBrokenFields bool
+	Charset          string
 }
 
 // A DBFMemo is a DBF memo.
@@ -170,6 +171,10 @@ func ReadDBF(r io.Reader, _ int64, options *ReadDBFOptions) (*DBF, error) {
 				fieldData := recordData[offset : offset+fieldDescriptor.Length]
 				offset += fieldDescriptor.Length
 				field, err := fieldDescriptor.ParseRecord(fieldData, decoder)
+				if options.SkipBrokenFields && err != nil {
+					field = nil
+					err = nil
+				}
 				if err != nil {
 					return nil, fmt.Errorf("field %s: %w", fieldDescriptor.Name, err)
 				}
