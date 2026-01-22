@@ -1,12 +1,12 @@
 module github.com/twpayne/go-shapefile
 
-go 1.23
+go 1.24.0
 
 require (
 	github.com/alecthomas/assert/v2 v2.10.0
-	github.com/twpayne/go-geom v1.5.7
-	golang.org/x/net v0.33.0
-	golang.org/x/text v0.21.0
+	github.com/twpayne/go-geom v1.6.1
+	golang.org/x/net v0.49.0
+	golang.org/x/text v0.33.0
 )
 
 require (
