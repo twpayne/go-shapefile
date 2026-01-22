@@ -333,7 +333,6 @@ func NewScanner(
 	var scannerSHP *ScannerSHP
 	var scannerSHX *ScannerSHX
 	var scannerDBF *ScannerDBF
-	var estimatedSHX, estimatedDBF int64
 	var errSHP, errSHX, errDBF error
 
 	wg.Add(3)
@@ -358,7 +357,6 @@ func NewScanner(
 				return
 			}
 			scannerDBF = scanner
-			estimatedDBF = (sizes[".dbf"] - dbfHeaderLength) / int64(scanner.header.RecordSize)
 		}
 	}()
 
@@ -371,7 +369,6 @@ func NewScanner(
 				return
 			}
 			scannerSHX = scanner
-			estimatedSHX = (sizes[".shx"] - headerSize) / 8
 		}
 	}()
 
@@ -380,13 +377,22 @@ func NewScanner(
 		return nil, err
 	}
 
+	var estimatedSHX, estimatedDBF int64
+	if sizes[".shx"] > headerSize {
+		estimatedSHX = (sizes[".shx"] - headerSize) / 8
+	}
+	if sizes[".dbf"] > dbfHeaderLength && scannerDBF != nil {
+		estimatedDBF = (sizes[".dbf"] - dbfHeaderLength) / int64(scannerDBF.header.RecordSize)
+	}
+	estimatedRecords := max(estimatedDBF, estimatedSHX)
+
 	return &Scanner{
 		scanSHP:          scannerSHP,
 		scanSHX:          scannerSHX,
 		scanDBF:          scannerDBF,
 		filePRJ:          prj,
 		fileCPG:          cpg,
-		estimatedRecords: max(estimatedDBF, estimatedSHX),
+		estimatedRecords: estimatedRecords,
 	}, nil
 }
 
