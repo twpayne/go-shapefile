@@ -77,6 +77,7 @@ type DBFFieldDescriptor struct {
 // See https://www.clicketyclick.dk/databases/xbase/format/dbf.html.
 type DBF struct {
 	DBFHeader
+
 	FieldDescriptors []*DBFFieldDescriptor
 	Records          [][]any
 }
@@ -190,7 +191,7 @@ func ReadDBF(r io.Reader, _ int64, options *ReadDBFOptions) (*DBF, error) {
 		// Ignore missing end of file marker.
 	case err != nil:
 		return nil, err
-	case data[0] != '\x1a':
+	case len(data) == 0 || data[0] != '\x1a':
 		return nil, fmt.Errorf("%d: invalid end of file marker", data[0])
 	}
 

@@ -32,6 +32,7 @@ type ReadSHPOptions struct {
 // A SHP is a .shp file.
 type SHP struct {
 	SHxHeader
+
 	Records []*SHPRecord
 }
 

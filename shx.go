@@ -10,6 +10,7 @@ import (
 // An SHX is a .shx file.
 type SHX struct {
 	SHxHeader
+
 	Records []SHXRecord
 }
 
