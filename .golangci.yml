@@ -1,156 +1,173 @@
+version: "2"
 run:
-  go: '1.23'
-
+  go: "1.24"
 linters:
   enable:
-  - asasalint
-  - asciicheck
-  - bidichk
-  - bodyclose
-  - canonicalheader
-  - containedctx
-  - contextcheck
-  - copyloopvar
-  - decorder
-  - dogsled
-  - dupl
-  - dupword
-  - durationcheck
-  - err113
-  - errcheck
-  - errchkjson
-  - errname
-  - errorlint
-  - fatcontext
-  - forbidigo
-  - forcetypeassert
-  - gci
-  - ginkgolinter
-  - gocheckcompilerdirectives
-  - gochecknoinits
-  - gochecksumtype
-  - goconst
-  - gocritic
-  - godot
-  - gofmt
-  - gofumpt
-  - goheader
-  - goimports
-  - gomoddirectives
-  - gomodguard
-  - goprintffuncname
-  - gosec
-  - gosimple
-  - gosmopolitan
-  - govet
-  - grouper
-  - iface
-  - importas
-  - inamedparam
-  - ineffassign
-  - interfacebloat
-  - intrange
-  - ireturn
-  - lll
-  - loggercheck
-  - makezero
-  - mirror
-  - misspell
-  - musttag
-  - nilerr
-  - noctx
-  - nolintlint
-  - nosprintfhostport
-  - perfsprint
-  - prealloc
-  - predeclared
-  - promlinter
-  - protogetter
-  - reassign
-  - recvcheck
-  - revive
-  - rowserrcheck
-  - sloglint
-  - spancheck
-  - sqlclosecheck
-  - staticcheck
-  - stylecheck
-  - tagalign
-  - tagliatelle
-  - tenv
-  - testableexamples
-  - testifylint
-  - thelper
-  - typecheck
-  - unconvert
-  - unparam
-  - unused
-  - usestdlibvars
-  - wastedassign
-  - whitespace
-  - zerologlint
-  disable:
-  - cyclop
-  - depguard
-  - exhaustive
-  - exhaustruct
-  - funlen
-  - gochecknoglobals
-  - gocognit
-  - gocyclo
-  - godox
-  - maintidx
-  - nakedret
-  - nestif
-  - nilnil
-  - nlreturn
-  - nonamedreturns
-  - paralleltest
-  - testpackage
-  - tparallel
-  - varnamelen
-  - wrapcheck
-  - wsl
-
-linters-settings:
-  forbidigo:
-    forbid:
-    - ^fmt\.Print.*$
-    - ^ioutil\..*$
-    - ^os\.(DirEntry|FileInfo|FileMode|Is.*|Mode.*)$
-  gci:
-    sections:
-    - standard
-    - default
-    - prefix(github.com/twpayne/go-shapefile)
-  gofumpt:
-    extra-rules: true
-    module-path: github.com/twpayne/go-shapefile
-  goimports:
-    local-prefixes: github.com/twpayne/go-shapefile
-  gosec:
-    excludes:
-    - G115
-  ireturn:
-    allow:
-    - empty
-    - error
-    - github\.com/twpayne/go-geom\.T
-    - stdlib
-  misspell:
-    locale: US
-  stylecheck:
-    checks:
-    - all
-
-issues:
-  include:
-  - EXC0011   # include issues about comments from `stylecheck`
-  exclude-rules:
-  - linters:
+    - arangolint
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - decorder
+    - dogsled
+    - dupl
+    - dupword
+    - durationcheck
+    - embeddedstructfieldcheck
     - err113
-    text: do not define dynamic errors, use wrapped static errors instead
-  - linters:
+    - errchkjson
+    - errname
+    - errorlint
+    - exptostd
+    - fatcontext
+    - forbidigo
+    - forcetypeassert
+    - funcorder
+    - ginkgolinter
+    - gocheckcompilerdirectives
+    - gochecknoinits
+    - gochecksumtype
+    - goconst
+    - gocritic
+    - godot
+    - goheader
+    - gomoddirectives
+    - gomodguard
+    - goprintffuncname
     - gosec
+    - gosmopolitan
+    - grouper
+    - iface
+    - importas
+    - inamedparam
+    - interfacebloat
+    - intrange
+    - iotamixing
+    - ireturn
     - lll
-    path: _test\.go$
+    - loggercheck
+    - makezero
+    - mirror
+    - misspell
+    - modernize
+    - musttag
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - noctx
+    - nolintlint
+    - nosprintfhostport
+    - perfsprint
+    - prealloc
+    - predeclared
+    - promlinter
+    - protogetter
+    - reassign
+    - recvcheck
+    - rowserrcheck
+    - sloglint
+    - spancheck
+    - sqlclosecheck
+    - staticcheck
+    - tagalign
+    - tagliatelle
+    - testableexamples
+    - testifylint
+    - thelper
+    - unconvert
+    - unparam
+    - unqueryvet
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+    - zerologlint
+  disable:
+    - cyclop
+    - depguard
+    - exhaustive
+    - exhaustruct
+    - funlen
+    - gochecknoglobals
+    - gocognit
+    - gocyclo
+    - godox
+    - maintidx
+    - nakedret
+    - nestif
+    - nilnil
+    - nlreturn
+    - nonamedreturns
+    - paralleltest
+    - revive
+    - testpackage
+    - tparallel
+    - varnamelen
+    - wrapcheck
+    - wsl
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print.*$
+        - pattern: ^ioutil\..*$
+        - pattern: ^os\.(DirEntry|FileInfo|FileMode|Is.*|Mode.*)$
+    gosec:
+      excludes:
+        - G115
+    ireturn:
+      allow:
+        - empty
+        - error
+        - github\.com/twpayne/go-geom\.T
+        - stdlib
+    misspell:
+      locale: US
+    staticcheck:
+      checks:
+        - all
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - err113
+        text: do not define dynamic errors, use wrapped static errors instead
+      - linters:
+          - gosec
+          - lll
+        path: _test\.go$
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/twpayne/go-shapefile)
+    gofumpt:
+      module-path: github.com/twpayne/go-shapefile
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/twpayne/go-shapefile
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

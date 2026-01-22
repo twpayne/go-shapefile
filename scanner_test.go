@@ -152,8 +152,8 @@ func TestReadScanner(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotZero(t, shapefile)
 
-				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.SHxHeader.ShapeType)
-				assert.Equal(t, tc.expectedBounds, shapefile.SHP.SHxHeader.Bounds)
+				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
+				assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
 				assert.Equal(t, tc.expectedRecordsLen, shapefile.NumRecords())
 				assert.Equal(t, tc.expectedGeom0, shapefile.SHP.Records[0].Geom)
 
@@ -176,8 +176,8 @@ func TestReadScanner(t *testing.T) {
 				}
 
 				if tc.hasSHX {
-					assert.Equal(t, tc.expectedShapeType, shapefile.SHP.SHxHeader.ShapeType)
-					assert.Equal(t, tc.expectedBounds, shapefile.SHP.SHxHeader.Bounds)
+					assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
+					assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
 					assert.Equal(t, shapefile.NumRecords(), tc.expectedRecordsLen)
 				}
 			})
@@ -376,8 +376,8 @@ func TestReadScannerFSAndZipFile(t *testing.T) {
 		t.Run(tc.filename, func(t *testing.T) {
 			testShapefile := func(t *testing.T, shapefile *Shapefile) {
 				t.Helper()
-				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.SHxHeader.ShapeType)
-				assert.Equal(t, tc.expectedBounds, shapefile.SHP.SHxHeader.Bounds)
+				assert.Equal(t, tc.expectedShapeType, shapefile.SHP.ShapeType)
+				assert.Equal(t, tc.expectedBounds, shapefile.SHP.Bounds)
 
 				assert.Equal(t, shapefile.NumRecords(), tc.expectedRecordsLen)
 				if tc.expectedDBFRecord0Fields != nil {

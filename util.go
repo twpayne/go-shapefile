@@ -7,8 +7,7 @@ import (
 
 func isMacOSXPath(p string) bool {
 	dir, _ := filepath.Split(p)
-	pathElements := strings.Split(dir, string(filepath.Separator))
-	for _, elem := range pathElements {
+	for elem := range strings.SplitSeq(dir, string(filepath.Separator)) {
 		if elem == "__MACOSX" {
 			return true
 		}
