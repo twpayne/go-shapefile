@@ -343,6 +343,7 @@ func NewScanner(
 			scanner, err := NewScannerSHP(reader, sizes[".shp"], options.SHP)
 			if err != nil {
 				errSHP = fmt.Errorf("NewScannerSHP: %w", err)
+				return
 			}
 			scannerSHP = scanner
 		}
@@ -354,6 +355,7 @@ func NewScanner(
 			scanner, err := NewScannerDBF(reader, options.DBF)
 			if err != nil {
 				errDBF = fmt.Errorf("NewScannerDBF: %w", err)
+				return
 			}
 			scannerDBF = scanner
 			estimatedDBF = (sizes[".dbf"] - dbfHeaderLength) / int64(scanner.header.RecordSize)
@@ -366,6 +368,7 @@ func NewScanner(
 			scanner, err := NewScannerSHX(reader, sizes[".shx"])
 			if err != nil {
 				errSHX = fmt.Errorf("NewScannerSHX: %w", err)
+				return
 			}
 			scannerSHX = scanner
 			estimatedSHX = (sizes[".shx"] - headerSize) / 8
